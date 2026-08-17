@@ -1,0 +1,12 @@
+# build output — regenerate with: python tools/build_single.py
+# (tracked deliberately: see note in README. Uncomment to stop tracking.)
+# dist/
+
+# source workbooks stay outside the repo (client data)
+*.xlsx
+*.xls
+
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

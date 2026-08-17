@@ -1,0 +1,68 @@
+# Changelog
+
+All notable changes to the Mehola CRM demo.
+Format follows [Keep a Changelog](https://keepachangelog.com/); dates are ISO.
+
+## [0.1.0] — 2026-08-17
+
+First working demo. Built in one session from the three source inputs
+(`what-the-company-wants.txt`, `meeting-transcript.txt`, `רוסמן..xlsx`) after a
+power cut ended the previous session with an empty repository.
+
+### Added — data pipeline
+- `tools/migrate_excel.py` — Excel → normalized dataset in one pass:
+  staging, cleansing, de-duplication, audit. Emits `src/data/rosman.js`.
+  Result: 34 work days (21/06/26–09/08/26), 410 attendance rows, 32 workers,
+  7 carriers, 1,250,382 production units.
+- Cleansing rules: 12 worker name-spelling merges; carrier spellings unified
+  (`גסלין`→`גיסלין`, `כרסתין`→`כריסתין`, `עצמאית`→`עצמאי`); Israeli ID check-digit
+  validation; per-day production totals parsed, including the two `בונס` days.
+- Chronological date repair: a block written `21\06\26` between 20/07 and 22/07
+  and labelled שלישי is recovered as 21/07/26 from the Hebrew day name.
+- Audit log: 36 findings emitted with the data — 13 auto-corrected (with the
+  before/after recorded), 23 left for the office (20 workers without ת.ז,
+  1 worker with two IDs, 1 ID shared by three people, 1 day without production).
+  Nothing is dropped silently.
+
+### Added — costing engine (`src/lib/calc.js`)
+- Hours split into 100% / 125% / 150% tiers (125% above 8.5h, 150% above 10.5h).
+- Rate resolution: worker-specific override → site base rate (₪40; בושרה ₪43, רנא ₪44).
+- Transport costed per carrier in two modes: flat per day (גיסלין ₪400) or
+  per worker (אבו רדאד ₪30), plus a no-charge mode for `עצמאי`.
+- Revenue from production units × unit price (₪0.10), profit, margin, and the
+  break-even unit price per day and per period.
+- Aggregations: per day, per carrier, per worker ("Berut"), per month.
+
+### Added — screens
+- `סקירת אתר` — KPIs, profit-per-day column chart, revenue-vs-cost trend,
+  cost structure, carrier and worker breakdowns, monthly summary.
+- `רווח והפסד יומי` — the daily P&L sheet the client asked for in writing:
+  worker cost, transport cost and day cost each in its own column, against
+  revenue, profit, margin and break-even price. Totals row, CSV export.
+- `פירוט יום` — worker-by-worker costing for one day, transport breakdown, day P&L.
+- `עובדים` + `תיק עובד` — de-duplicated register with search/filter/sort, and a
+  per-worker file with merged spellings, cost breakdown, monthly totals and log.
+- `תעריפים והגדרות` — the whole rate book, editable, recalculating the entire
+  period live; shows the delta against the client's stated rates; one click sets
+  the break-even unit price. Persists to `localStorage`, resettable.
+- `איכות נתונים` — the migration audit, grouped by finding type, with the
+  business impact of each.
+
+### Added — packaging
+- `tools/build_single.py` — bundles CSS, all scripts, data and logo into one
+  210 KB `dist/mehola-crm-demo.html` that opens by double-click, offline.
+- `tools/serve.py` + `start.bat` — local dev server that opens the browser.
+- `README.md`, `docs/HANDOFF.md`, and a 10-minute demo walkthrough in both
+  Hebrew (`docs/demo-script-he.md`) and English (`docs/demo-script-en.md`).
+
+### Notes
+- Assumed, pending client confirmation: ₪30/worker transport for the four carriers
+  the brief does not name (שאדי, נמר, מאריא, כריסתין — ₪1,680 over the period);
+  בושרה ₪43 applied to בושרה שויקי; רנא גיריס = רנא גריס.
+- Finding: at ₪0.10/unit the site loses money in both scenarios — −₪31,083
+  on the hours actually punched, −₪83,406 on the 07:00–18:00 day the client asked
+  us to model. Break-even is ₪0.125 and ₪0.167 respectively.
+- Overtime is daily only; the weekly 42-hour trigger from the feature report is
+  not implemented.
+- Out of scope for this demo: mobile app, GPS/NFC attendance, תלוש PDF splitting,
+  טופס 101, permissions matrix, WhatsApp integration, the other 51 sites, backend.

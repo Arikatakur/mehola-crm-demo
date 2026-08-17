@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mehola Group — מערכת ניהול אתרים (דמו)</title>
+<link rel="icon" href="assets/logo.jpg">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <img src="assets/logo.jpg" alt="Mehola Group">
+      <div>
+        <strong>Mehola Group</strong>
+        <span>מערכת ניהול אתרים</span>
+      </div>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="side-foot">
+      <div class="site-chip">
+        <span class="dot"></span>
+        <div>
+          <strong id="siteName">—</strong>
+          <span id="siteRange">—</span>
+        </div>
+      </div>
+      <p class="demo-note">גרסת הדגמה · נתוני אמת מגיליון האתר</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="viewTitle">—</h1>
+        <p id="viewSub"></p>
+      </div>
+      <div class="topbar-actions">
+        <div class="scenario" id="scenario"></div>
+        <button class="btn ghost" id="btnPrint">הדפסה</button>
+      </div>
+    </header>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<script src="src/data/rosman.js"></script>
+<script src="src/lib/format.js"></script>
+<script src="src/lib/config.js"></script>
+<script src="src/lib/calc.js"></script>
+<script src="src/lib/ui.js"></script>
+<script src="src/views/dashboard.js"></script>
+<script src="src/views/pnl.js"></script>
+<script src="src/views/day.js"></script>
+<script src="src/views/workers.js"></script>
+<script src="src/views/worker.js"></script>
+<script src="src/views/rates.js"></script>
+<script src="src/views/quality.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
