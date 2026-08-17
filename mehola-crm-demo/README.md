@@ -15,6 +15,12 @@ It answers, end to end, what the client asked for in writing:
 | Unit price 0.1 ₪ | `תעריפים והגדרות` → `הכנסה`, editable live |
 | Profit / loss per day, in its own sheet | `רווח והפסד יומי` — one row per day, with a totals row and CSV export |
 
+Beyond the brief, the demo can also be **used**, not just read: add a worker with
+their own hourly rate, correct an imported record, assign someone to a work day,
+open a new day, or fill in a missing production total — each one recalculates the
+P&L immediately. Those records live in the browser over the imported sheet, which
+is never modified; see "Records created in the app" below.
+
 ## Run it
 
 **The copy you send to the client** — no install, no server, no network:
@@ -47,6 +53,7 @@ index.html               shell: sidebar, top bar, script order
 src/styles.css           all styling (light, RTL-first)
 src/lib/format.js        he-IL money / dates / hours, RTL-safe number isolates
 src/lib/config.js        the rate book: defaults from the client brief + localStorage
+src/lib/store.js         records created in the app, layered over the imported sheet
 src/lib/calc.js          the engine: hours -> tiers -> cost -> transport -> P&L
 src/lib/ui.js            DOM/table/chart/CSV helpers (no dependencies)
 src/views/*.js           one file per screen
@@ -67,6 +74,22 @@ migrated sheet, the rate book, and the schedule mode. Nothing is hard-coded.
 Rates, overtime thresholds, carrier rules and the unit price are all editable in
 `תעריפים והגדרות`, and the whole period recalculates immediately (changes are
 kept in the browser's localStorage; `החזר לתעריפי הדרישות` clears them).
+
+## Records created in the app
+
+`src/lib/store.js` holds everything the user creates — new workers, edits to
+imported ones, attendance assignments, production totals, new work days — as an
+overlay in `localStorage`, applied over `src/data/rosman.js` on every render.
+
+Two properties this buys, both of which matter in front of a client:
+
+- the imported sheet is never modified, so "what the sheet said" stays available;
+- anything added is tagged, and shows up badged (`נוסף במערכת`, `נוסף`, `עודכן`),
+  so a record made during a demo is never mistaken for source data.
+
+`תעריפים והגדרות` shows the count of such records and clears them in one click.
+This module is also the seam where a real API client would go: replace the four
+localStorage calls and every screen keeps working unchanged.
 
 See `docs/HANDOFF.md` for decisions, assumptions and open questions,
 and `CHANGELOG.md` for what changed when.

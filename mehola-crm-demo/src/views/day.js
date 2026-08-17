@@ -68,7 +68,10 @@
         return {
           __cls: 'clickable',
           __attrs: 'onclick="location.hash=\'#/worker/' + l.workerId + '\'"',
-          name: '<span class="strong">' + ui.esc(l.name) + '</span>',
+          name: '<span class="strong">' + ui.esc(l.name) + '</span>' +
+                (l.shiftId ? ' ' + ui.badge('נוסף', 'info') +
+                  ' <a href="#" class="muted rm-shift" data-shift="' + l.shiftId +
+                  '" title="הסרת השיבוץ" onclick="event.stopPropagation()">✕</a>' : ''),
           tz: l.worker && l.worker.tz ? '<span class="muted num">' + l.worker.tz + '</span>'
                                       : ui.badge('חסר', 'warn'),
           team: '<span class="muted">' + ui.esc(l.team) + '</span>',
@@ -101,10 +104,41 @@
             'למעבר לשעות שנרשמו בפועל בגיליון — ראו המתג בראש המסך.', '', 'ℹ')
         : ui.notice('החישוב לפי השעות שנרשמו בגיליון המקור.', '', 'ℹ');
 
+      /* --- assign a worker to this day --- */
+      var assignable = ctx.data.workers.filter(function (w) {
+        if (w.active === false) return false;
+        return !d.lines.some(function (l) { return l.workerId === w.id; });
+      });
+      var addPanel =
+        '<div id="addRow" class="add-panel" hidden>' +
+          '<div class="grid g-4">' +
+            '<div class="field"><label>עובד/ת</label><select id="aWorker">' +
+              assignable.map(function (w) {
+                return '<option value="' + w.id + '">' + ui.esc(w.name) +
+                  (w.tz ? ' · ' + w.tz : '') + '</option>';
+              }).join('') +
+            '</select><span class="hint">' + assignable.length + ' עובדים זמינים לשיבוץ · ' +
+              '<a href="#/worker-new">עובד חדש</a></span></div>' +
+            '<div class="field"><label>כניסה</label>' +
+              '<input type="text" id="aIn" value="' + (cfg.scheduleMode === 'required' ? cfg.requiredIn : '07:00') + '"></div>' +
+            '<div class="field"><label>יציאה</label>' +
+              '<input type="text" id="aOut" value="' + (cfg.scheduleMode === 'required' ? cfg.requiredOut : '15:30') + '"></div>' +
+            '<div class="field"><label>מסיע</label>' +
+              '<input type="text" id="aCarrier" list="carrierList2" placeholder="לפי ברירת המחדל של העובד/ת">' +
+              '<datalist id="carrierList2">' + ctx.data.carriers.map(function (c) {
+                return '<option value="' + ui.esc(c) + '">';
+              }).join('') + '</datalist></div>' +
+          '</div>' +
+          '<div style="height:12px"></div>' +
+          '<button class="btn primary" id="aSave">שיבוץ ליום זה</button> ' +
+          '<button class="btn ghost" id="aCancel">ביטול</button>' +
+        '</div>';
+
       var workersCard = ui.card('עלות עובדים מפורטת', d.workers + ' עובדים ביום זה',
-        '<div style="padding:0 0 14px">' + scheduleNote + '</div>' +
+        '<div style="padding:0 0 14px">' + scheduleNote + addPanel + '</div>' +
         ui.table(cols, rows, { foot: foot }),
-        { actions: '<button class="btn sm" data-csv="day">ייצוא CSV</button>' });
+        { actions: '<button class="btn sm primary" id="btnAdd">הוספת עובד ליום</button> ' +
+                   '<button class="btn sm" data-csv="day">ייצוא CSV</button>' });
 
       /* --- transport --- */
       var tCols = [
@@ -154,10 +188,57 @@
         '<div class="stat-line"><span class="k">מחיר ליחידה לאיזון</span><span class="v">' +
           (d.breakEvenPrice ? f.money(d.breakEvenPrice, 3) : '—') + '</span></div>' +
         '<div class="stat-line"><span class="k">תפוקה לשעת עבודה</span><span class="v">' +
-          (d.unitsPerWorkHour ? f.num(d.unitsPerWorkHour, 0) + ' יח׳' : '—') + '</span></div>');
+          (d.unitsPerWorkHour ? f.num(d.unitsPerWorkHour, 0) + ' יח׳' : '—') + '</span></div>' +
+        '<div style="height:14px"></div>' +
+        '<div class="field"><label>' + (d.hasUnits ? 'עדכון סה״כ ייצור ליום' : 'הזנת סה״כ ייצור ליום') + '</label>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input type="number" id="uVal" step="1" min="0" value="' +
+            (d.hasUnits ? d.units : '') + '" placeholder="כמות מדבקות">' +
+          '<button class="btn primary" id="uSave">שמירה</button>' +
+        '</div><span class="hint">' +
+          (d.hasUnits ? 'מעדכן את ההכנסה והרווח של היום מיידית'
+                      : 'ליום זה חסר סה״כ ייצור בגיליון — הזנת המספר תשלים את חישוב הרווח') +
+        '</span></div>');
 
       mount.innerHTML = nav + kpis + '<div style="height:18px"></div>' + workersCard +
         '<div style="height:18px"></div><div class="grid g-2">' + transportCard + pnlCard + '</div>';
+
+      /* --- wiring: assign worker, remove assignment, day production --- */
+      var $ = function (id) { return mount.querySelector('#' + id); };
+      var panel = $('addRow');
+
+      $('btnAdd').addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) $('aWorker').focus();
+      });
+      $('aCancel').addEventListener('click', function () { panel.hidden = true; });
+
+      $('aSave').addEventListener('click', function () {
+        var id = $('aWorker').value;
+        if (!id) return;
+        var w = null;
+        ctx.data.workers.forEach(function (x) { if (x.id === id) w = x; });
+        M.store.addShift({
+          date: d.date, workerId: id,
+          'in': $('aIn').value.trim() || '07:00',
+          out: $('aOut').value.trim() || '15:30',
+          team: w && w.team ? w.team : '',
+          carrier: $('aCarrier').value.trim() || (w && w.carrier ? w.carrier : 'עצמאי'),
+          dept: 'כללי'
+        });
+      });
+
+      Array.prototype.forEach.call(mount.querySelectorAll('.rm-shift'), function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          M.store.removeShift(a.getAttribute('data-shift'));
+        });
+      });
+
+      $('uSave').addEventListener('click', function () {
+        M.store.setDayUnits(d.date, $('uVal').value === '' ? null : $('uVal').value);
+      });
 
       ui.bindCsv(mount, {
         day: function () {

@@ -293,6 +293,22 @@ input:focus, select:focus { outline: 2px solid var(--brand-soft); border-color: 
 
 .empty { padding: 40px; text-align: center; color: var(--ink-3); }
 
+/* inline create/assign forms */
+.add-panel {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.add-panel[hidden] { display: none; }
+.hint.pos { color: var(--pos); }
+.hint.neg { color: var(--neg); }
+.btn.neg { background: var(--neg); border-color: var(--neg); color: #fff; }
+.btn.neg:hover { background: #a82c23; border-color: #a82c23; }
+a.rm-shift { text-decoration: none; font-weight: 700; }
+a.rm-shift:hover { color: var(--neg); }
+
 .crumb { font-size: 12.5px; color: var(--ink-3); margin-bottom: 12px; }
 .crumb a { color: var(--ink-2); }
 

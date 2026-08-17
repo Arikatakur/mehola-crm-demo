@@ -8,12 +8,16 @@
     { path: 'day', view: 'day' },
     { path: 'workers', view: 'workers', nav: 'עובדים', icon: '☰' },
     { path: 'worker', view: 'worker' },
+    { path: 'worker-new', view: 'workerform' },
+    { path: 'worker-edit', view: 'workerform' },
     { path: 'rates', view: 'rates', nav: 'תעריפים והגדרות', icon: '⚙', group: 'ניהול' },
     { path: 'quality', view: 'quality', nav: 'איכות נתונים', icon: '⚑', group: 'ניהול' }
   ];
 
-  var data = M.DATA;
+  /* imported sheet + everything created in the app, layered */
+  var data = M.store.apply(M.DATA);
   var cfg = M.config.load(data);
+  M.config.ensureCarriers(data);
 
   function parseHash() {
     var raw = (location.hash || '#/').replace(/^#\/?/, '');
@@ -85,7 +89,8 @@
 
     var days = M.calc.run(data, cfg);
     var ctx = {
-      data: data, cfg: cfg, days: days, totals: M.calc.totals(days), params: r.params
+      data: data, cfg: cfg, days: days, totals: M.calc.totals(days),
+      params: r.params, path: r.route.path
     };
 
     document.getElementById('viewTitle').textContent =
@@ -111,6 +116,12 @@
   });
 
   M.config.onChange(function (next) { cfg = next; render(); });
+
+  M.store.onChange(function () {
+    data = M.store.apply(M.DATA);
+    M.config.ensureCarriers(data);
+    render();
+  });
 
   document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('siteName').textContent = data.site.name;

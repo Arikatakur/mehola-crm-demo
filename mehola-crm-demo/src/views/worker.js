@@ -46,27 +46,22 @@
                'שכר ' + f.money(w.cost) + ' · הסעות ' + f.money(w.transport), { accent: true }) +
         '</div>';
 
+      if (!w.days) {
+        mount.innerHTML =
+          '<div class="crumb"><a href="#/workers">עובדים</a> ← ' + ui.esc(w.name) + '</div>' +
+          kpis + '<div style="height:18px"></div>' +
+          ui.card('פרטי עובד', null, identityHtml(w, ctx, ui) +
+            '<div style="height:14px"></div>' +
+            ui.notice('העובד/ת נוסף/ה למאגר אך טרם שובץ/ה ליום עבודה, ולכן אינו/ה משפיע/ה על ' +
+              'הרווח וההפסד. לשיבוץ: פתחו יום ב<a href="#/pnl">רווח והפסד יומי</a> ולחצו ' +
+              '"הוספת עובד ליום".', '', 'ℹ'),
+            { actions: '<a class="btn sm" href="#/worker-edit/' + w.id + '">עריכה</a>' });
+        return;
+      }
+
       /* identity card */
-      var aliases = (w.aliases || []);
-      var idCard = ui.card('פרטי עובד', null,
-        '<div class="stat-line"><span class="k">שם</span><span class="v">' + ui.esc(w.name) + '</span></div>' +
-        '<div class="stat-line"><span class="k">ת.ז</span><span class="v">' +
-          (w.tz ? '<span class="num">' + w.tz + '</span>'
-                : ui.badge('חסר בגיליון', 'warn')) + '</span></div>' +
-        '<div class="stat-line"><span class="k">כתיבים שאוחדו</span><span class="v">' +
-          (aliases.length ? ui.esc(aliases.join(' · ')) : '<span class="muted">—</span>') + '</span></div>' +
-        '<div class="stat-line"><span class="k">צוות</span><span class="v">' +
-          (Object.keys(w.teams).join(', ') || '<span class="muted">—</span>') + '</span></div>' +
-        '<div class="stat-line"><span class="k">מסיעים</span><span class="v">' +
-          Object.keys(w.carriers).map(function (c) {
-            return ui.esc(c) + ' <span class="muted">(' + w.carriers[c] + ')</span>';
-          }).join(' · ') + '</span></div>' +
-        '<div class="stat-line"><span class="k">אתר</span><span class="v">' +
-          ui.esc(ctx.data.site.name) + '</span></div>' +
-        (aliases.length
-          ? '<div style="margin-top:12px">' + ui.notice('הרשומה אוחדה מכמה כתיבים של אותו שם בגיליון. ' +
-              'במערכת אמיתית האיחוד נעשה לפי ת.ז ונשמר לצמיתות.', '', 'ℹ') + '</div>'
-          : ''));
+      var idCard = ui.card('פרטי עובד', null, identityHtml(w, ctx, ui),
+        { actions: '<a class="btn sm" href="#/worker-edit/' + w.id + '">עריכה</a>' });
 
       /* cost split */
       var costCard = ui.card('פירוט עלות', 'לפי מדרג השעות הנוספות של האתר',
@@ -157,6 +152,37 @@
       });
     }
   };
+
+  /** Identity block — shared by the full file and the "no shifts yet" short form. */
+  function identityHtml(w, ctx, ui) {
+    var aliases = (w.aliases || []);
+    var src = w.worker || w;
+    var line = function (k, v) {
+      return '<div class="stat-line"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+    };
+    return line('שם', ui.esc(w.name) +
+                (w.added ? ' ' + ui.badge('נוסף במערכת', 'pos') : '') +
+                (w.edited ? ' ' + ui.badge('עודכן', 'info') : '')) +
+      line('ת.ז', w.tz
+        ? '<span class="num">' + w.tz + '</span>' +
+          (M.store.validId(w.tz) ? '' : ' ' + ui.badge('ספרת ביקורת שגויה', 'warn'))
+        : ui.badge('חסר בגיליון', 'warn')) +
+      (src.phone ? line('טלפון', '<span class="num">' + ui.esc(src.phone) + '</span>') : '') +
+      line('כתיבים שאוחדו',
+        aliases.length ? ui.esc(aliases.join(' · ')) : '<span class="muted">—</span>') +
+      line('צוות', Object.keys(w.teams).join(', ') || '<span class="muted">—</span>') +
+      line('מסיעים', Object.keys(w.carriers).map(function (c) {
+        return ui.esc(c) + (w.carriers[c] ? ' <span class="muted">(' + w.carriers[c] + ')</span>' : '');
+      }).join(' · ') || '<span class="muted">—</span>') +
+      line('סטטוס', w.active === false ? ui.badge('לא פעיל', 'warn') : ui.badge('פעיל', 'pos')) +
+      line('אתר', ui.esc(ctx.data.site.name)) +
+      (src.notes ? line('הערות', ui.esc(src.notes)) : '') +
+      (src.createdAt ? line('נוסף בתאריך', M.fmt.date(src.createdAt)) : '') +
+      (aliases.length
+        ? '<div style="margin-top:12px">' + ui.notice('הרשומה אוחדה מכמה כתיבים של אותו שם בגיליון. ' +
+            'במערכת אמיתית האיחוד נעשה לפי ת.ז ונשמר לצמיתות.', '', 'ℹ') + '</div>'
+        : '');
+  }
 
   function find(ctx) {
     var id = ctx.params[0];

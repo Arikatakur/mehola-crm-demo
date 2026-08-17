@@ -301,6 +301,22 @@ input:focus, select:focus { outline: 2px solid var(--brand-soft); border-color: 
 
 .empty { padding: 40px; text-align: center; color: var(--ink-3); }
 
+/* inline create/assign forms */
+.add-panel {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.add-panel[hidden] { display: none; }
+.hint.pos { color: var(--pos); }
+.hint.neg { color: var(--neg); }
+.btn.neg { background: var(--neg); border-color: var(--neg); color: #fff; }
+.btn.neg:hover { background: #a82c23; border-color: #a82c23; }
+a.rm-shift { text-decoration: none; font-weight: 700; }
+a.rm-shift:hover { color: var(--neg); }
+
 .crumb { font-size: 12.5px; color: var(--ink-3); margin-bottom: 12px; }
 .crumb a { color: var(--ink-2); }
 
@@ -319,7 +335,7 @@ input:focus, select:focus { outline: 2px solid var(--brand-soft); border-color: 
 }
 
 </style>
-<!-- built 2026-08-17 21:30 by tools/build_single.py — edit the sources, not this file -->
+<!-- built 2026-08-17 22:15 by tools/build_single.py — edit the sources, not this file -->
 </head>
 <body>
 
@@ -5272,6 +5288,20 @@ window.M.DATA = {
 
     get: function () { return current; },
 
+    /** A carrier typed into a worker/attendance form has no rule yet — give it the
+        assumed one so its cost is never silently zero. Quiet: no re-render. */
+    ensureCarriers: function (data) {
+      var added = false;
+      (data.carriers || []).forEach(function (name) {
+        if (!current.carriers[name]) {
+          current.carriers[name] = clone(CARRIER_DEFAULTS[name] || CARRIER_ASSUMED);
+          added = true;
+        }
+      });
+      if (added) { try { localStorage.setItem(KEY, JSON.stringify(current)); } catch (e) {} }
+      return added;
+    },
+
     /** patch: partial config; nested objects are merged one level deep */
     set: function (patch) {
       Object.keys(patch).forEach(function (k) {
@@ -5297,6 +5327,254 @@ window.M.DATA = {
       try { return !!localStorage.getItem(KEY); } catch (e) { return false; }
     }
   };
+})(window.M = window.M || {});
+
+</script>
+<script>
+/* ---- src/lib/store.js ---- */
+/* Editable overlay on top of the generated dataset.
+ *
+ * src/data/rosman.js is produced by the migration and never changes at runtime.
+ * Everything the user creates in the app — new workers, corrections to existing
+ * ones, attendance entries, a day's production total — lives here and is layered
+ * over that dataset on every render. Two consequences worth keeping:
+ *   - the imported sheet stays exactly as it was imported, always comparable;
+ *   - anything added is tagged, so a demo entry is never mistaken for source data.
+ *
+ * Persistence is localStorage (per browser). In the real product this module is
+ * the seam where the API client goes.
+ */
+(function (M) {
+  'use strict';
+
+  var KEY = 'mehola.crm.store.v1';
+
+  var EMPTY = {
+    workers: [],      // added workers      {id,name,tz,phone,team,carrier,active,notes,createdAt}
+    patches: {},      // edits to any worker {workerId: {tz,phone,team,notes,active,name}}
+    shifts: [],       // added attendance    {id,date,workerId,in,out,team,carrier,dept}
+    dayUnits: {},     // production overrides {date: units}
+    days: []          // dates created in the app that are not in the sheet
+  };
+
+  var state = null;
+  var listeners = [];
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function read() {
+    if (state) return state;
+    state = clone(EMPTY);
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        Object.keys(EMPTY).forEach(function (k) {
+          if (saved[k] !== undefined) state[k] = saved[k];
+        });
+      }
+    } catch (e) { /* private mode / corrupt value — start empty */ }
+    return state;
+  }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    listeners.forEach(function (fn) { fn(state); });
+  }
+
+  function nextId(prefix, list) {
+    var n = 0;
+    list.forEach(function (x) {
+      var m = String(x.id || '').match(new RegExp('^' + prefix + '(\\d+)$'));
+      if (m) n = Math.max(n, parseInt(m[1], 10));
+    });
+    return prefix + ('0' + (n + 1)).slice(-2);
+  }
+
+  M.store = {
+    /** Israeli ID check digit — same rule as the migration script. */
+    validId: function (tz) {
+      if (!/^\d{1,9}$/.test(tz || '')) return false;
+      var d = ('00000000' + tz).slice(-9), total = 0;
+      for (var i = 0; i < 9; i++) {
+        var n = parseInt(d.charAt(i), 10) * (i % 2 === 0 ? 1 : 2);
+        total += n < 10 ? n : n - 9;
+      }
+      return total % 10 === 0;
+    },
+
+    raw: read,
+
+    isEmpty: function () {
+      var s = read();
+      return !s.workers.length && !s.shifts.length &&
+             !Object.keys(s.patches).length && !Object.keys(s.dayUnits).length;
+    },
+
+    counts: function () {
+      var s = read();
+      return { workers: s.workers.length, shifts: s.shifts.length,
+               patches: Object.keys(s.patches).length,
+               dayUnits: Object.keys(s.dayUnits).length };
+    },
+
+    // -- workers ---------------------------------------------------------
+    addWorker: function (w) {
+      var s = read();
+      var rec = {
+        id: nextId('u', s.workers),
+        name: w.name, tz: w.tz || '', phone: w.phone || '',
+        team: w.team || '', carrier: w.carrier || '',
+        active: w.active !== false, notes: w.notes || '',
+        createdAt: new Date().toISOString().slice(0, 10)
+      };
+      s.workers.push(rec);
+      save();
+      return rec;
+    },
+
+    updateWorker: function (id, patch) {
+      var s = read();
+      var added = null;
+      s.workers.forEach(function (w) { if (w.id === id) added = w; });
+      if (added) {
+        Object.keys(patch).forEach(function (k) { added[k] = patch[k]; });
+      } else {
+        var p = s.patches[id] || (s.patches[id] = {});
+        Object.keys(patch).forEach(function (k) { p[k] = patch[k]; });
+      }
+      save();
+    },
+
+    /** Only workers created in the app can be deleted; imported ones are source data. */
+    removeWorker: function (id) {
+      var s = read();
+      s.workers = s.workers.filter(function (w) { return w.id !== id; });
+      s.shifts = s.shifts.filter(function (x) { return x.workerId !== id; });
+      save();
+    },
+
+    // -- attendance ------------------------------------------------------
+    addShift: function (sh) {
+      var s = read();
+      var rec = {
+        id: nextId('s', s.shifts),
+        date: sh.date, workerId: sh.workerId,
+        'in': sh['in'], out: sh.out,
+        team: sh.team || '', carrier: sh.carrier || '', dept: sh.dept || 'כללי'
+      };
+      s.shifts.push(rec);
+      if (s.days.indexOf(rec.date) === -1) s.days.push(rec.date);
+      save();
+      return rec;
+    },
+
+    removeShift: function (id) {
+      var s = read();
+      s.shifts = s.shifts.filter(function (x) { return x.id !== id; });
+      save();
+    },
+
+    // -- production ------------------------------------------------------
+    setDayUnits: function (date, units) {
+      var s = read();
+      if (units === null || units === '') delete s.dayUnits[date];
+      else s.dayUnits[date] = Number(units);
+      save();
+    },
+
+    addDay: function (date, units) {
+      var s = read();
+      if (s.days.indexOf(date) === -1) s.days.push(date);
+      if (units !== null && units !== undefined && units !== '') s.dayUnits[date] = Number(units);
+      save();
+    },
+
+    reset: function () {
+      state = clone(EMPTY);
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      listeners.forEach(function (fn) { fn(state); });
+    },
+
+    onChange: function (fn) { listeners.push(fn); },
+
+    /**
+     * Layer the overlay over the imported dataset.
+     * Returns a new object; M.DATA itself is never mutated.
+     */
+    apply: function (base) {
+      var s = read();
+      if (M.store.isEmpty()) return base;
+
+      var data = clone(base);
+
+      // 1. corrections to imported workers
+      data.workers.forEach(function (w) {
+        var p = s.patches[w.id];
+        if (!p) return;
+        Object.keys(p).forEach(function (k) { w[k] = p[k]; });
+        w.edited = true;
+      });
+
+      // 2. workers created in the app
+      s.workers.forEach(function (w) {
+        var rec = clone(w);
+        rec.aliases = rec.aliases || [];
+        rec.added = true;
+        data.workers.push(rec);
+      });
+
+      // 3. attendance created in the app
+      var byDate = {};
+      data.days.forEach(function (d) { byDate[d.date] = d; });
+      s.days.forEach(function (date) {
+        if (!byDate[date]) {
+          byDate[date] = { date: date, dayName: hebDay(date), units: null,
+                           baseUnits: null, bonusUnits: 0, shifts: [], added: true };
+          data.days.push(byDate[date]);
+        }
+      });
+      s.shifts.forEach(function (sh) {
+        var day = byDate[sh.date];
+        if (!day) return;
+        day.shifts.push({ workerId: sh.workerId, team: sh.team, carrier: sh.carrier,
+                          dept: sh.dept, 'in': sh['in'], out: sh.out,
+                          srcRow: null, shiftId: sh.id, added: true });
+      });
+
+      // 4. production totals entered in the app
+      Object.keys(s.dayUnits).forEach(function (date) {
+        var day = byDate[date];
+        if (!day) return;
+        day.units = s.dayUnits[date];
+        day.unitsEdited = true;
+      });
+
+      // 5. keep the derived lists in sync
+      data.days.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      var carriers = {}, teams = {};
+      data.days.forEach(function (d) {
+        d.shifts.forEach(function (x) {
+          if (x.carrier) carriers[x.carrier] = 1;
+          if (x.team) teams[x.team] = 1;
+        });
+      });
+      data.workers.forEach(function (w) {
+        if (w.carrier) carriers[w.carrier] = 1;
+        if (w.team) teams[w.team] = 1;
+      });
+      data.carriers = Object.keys(carriers).sort();
+      data.teams = Object.keys(teams).sort();
+      data.source = clone(data.source);
+      data.source.days = data.days.length;
+      data.source.workers = data.workers.length;
+      data.source.shifts = data.days.reduce(function (a, d) { return a + d.shifts.length; }, 0);
+      return data;
+    }
+  };
+
+  var HEB = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  function hebDay(iso) { return HEB[new Date(iso + 'T00:00:00').getDay()]; }
 })(window.M = window.M || {});
 
 </script>
@@ -5357,7 +5635,8 @@ window.M.DATA = {
       cost100: cost100, cost125: cost125, cost150: cost150,
       otCost: cost125 + cost150,
       cost: cost100 + cost125 + cost150,
-      srcRow: shift.srcRow
+      srcRow: shift.srcRow,
+      shiftId: shift.shiftId || null      // set only for attendance added in the app
     };
   }
 
@@ -5498,9 +5777,12 @@ window.M.DATA = {
       data.workers.forEach(function (w) {
         acc[w.id] = {
           worker: w, id: w.id, name: w.name, tz: w.tz, aliases: w.aliases,
+          added: !!w.added, edited: !!w.edited, active: w.active !== false,
           days: 0, hours: 0, h100: 0, h125: 0, h150: 0, cost: 0, otCost: 0,
-          transport: 0, rate: null, carriers: {}, teams: {}, entries: []
+          transport: 0, rate: rateFor(M.config.get(), w.id), carriers: {}, teams: {}, entries: []
         };
+        if (w.team) acc[w.id].teams[w.team] = 0;
+        if (w.carrier) acc[w.id].carriers[w.carrier] = 0;
       });
       days.forEach(function (d) {
         var perWorkerTransport = {};
@@ -5520,8 +5802,9 @@ window.M.DATA = {
           a.entries.push({ date: d.date, dayName: d.dayName, line: l, transport: t });
         });
       });
+      // workers with no shifts yet (just added in the app) stay in the list —
+      // they sort to the bottom, but they must be visible and rateable
       return Object.keys(acc).map(function (k) { return acc[k]; })
-        .filter(function (a) { return a.days > 0; })
         .sort(function (a, b) { return b.cost - a.cost; });
     },
 
@@ -6034,14 +6317,42 @@ window.M.DATA = {
       notes += ui.notice('שורת סיכום מציגה את כל התקופה. לחיצה על שורה פותחת את פירוט היום — ' +
         'עובד־עובד, שעה־שעה, כולל חלוקת ההסעות.', '', 'ℹ');
 
-      var actions = '<button class="btn sm" data-csv="pnl">ייצוא CSV</button>';
+      var actions = '<button class="btn sm primary" id="btnNewDay">+ יום עבודה</button> ' +
+                    '<button class="btn sm" data-csv="pnl">ייצוא CSV</button>';
+
+      var today = new Date().toISOString().slice(0, 10);
+      var newDayPanel =
+        '<div id="newDay" class="add-panel" hidden>' +
+          '<div class="grid g-3">' +
+            '<div class="field"><label>תאריך</label>' +
+              '<input type="date" id="ndDate" value="' + today + '"></div>' +
+            '<div class="field"><label>סה״כ ייצור (יחידות)</label>' +
+              '<input type="number" id="ndUnits" min="0" step="1" placeholder="ניתן להשלים בהמשך"></div>' +
+            '<div class="field"><label>&nbsp;</label>' +
+              '<div><button class="btn primary" id="ndSave">פתיחת יום</button> ' +
+              '<button class="btn ghost" id="ndCancel">ביטול</button></div>' +
+              '<span class="hint">היום נפתח ריק — משבצים אליו עובדים במסך פירוט היום</span></div>' +
+          '</div>' +
+        '</div>';
 
       mount.innerHTML = strip +
         '<div style="height:18px"></div>' +
         ui.card('גיליון רווח והפסד — ' + ctx.data.site.name, this.sub(ctx),
-                '<div style="padding:0 0 14px">' + notes + '</div>' +
+                '<div style="padding:0 0 14px">' + newDayPanel + notes + '</div>' +
                 ui.table(cols, rows, { foot: foot }),
                 { flush: false, actions: actions });
+
+      var panel = mount.querySelector('#newDay');
+      mount.querySelector('#btnNewDay').addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+      });
+      mount.querySelector('#ndCancel').addEventListener('click', function () { panel.hidden = true; });
+      mount.querySelector('#ndSave').addEventListener('click', function () {
+        var date = mount.querySelector('#ndDate').value;
+        if (!date) return;
+        M.store.addDay(date, mount.querySelector('#ndUnits').value);
+        location.hash = '#/day/' + date;
+      });
 
       ui.bindCsv(mount, {
         pnl: function () {
@@ -6137,7 +6448,10 @@ window.M.DATA = {
         return {
           __cls: 'clickable',
           __attrs: 'onclick="location.hash=\'#/worker/' + l.workerId + '\'"',
-          name: '<span class="strong">' + ui.esc(l.name) + '</span>',
+          name: '<span class="strong">' + ui.esc(l.name) + '</span>' +
+                (l.shiftId ? ' ' + ui.badge('נוסף', 'info') +
+                  ' <a href="#" class="muted rm-shift" data-shift="' + l.shiftId +
+                  '" title="הסרת השיבוץ" onclick="event.stopPropagation()">✕</a>' : ''),
           tz: l.worker && l.worker.tz ? '<span class="muted num">' + l.worker.tz + '</span>'
                                       : ui.badge('חסר', 'warn'),
           team: '<span class="muted">' + ui.esc(l.team) + '</span>',
@@ -6170,10 +6484,41 @@ window.M.DATA = {
             'למעבר לשעות שנרשמו בפועל בגיליון — ראו המתג בראש המסך.', '', 'ℹ')
         : ui.notice('החישוב לפי השעות שנרשמו בגיליון המקור.', '', 'ℹ');
 
+      /* --- assign a worker to this day --- */
+      var assignable = ctx.data.workers.filter(function (w) {
+        if (w.active === false) return false;
+        return !d.lines.some(function (l) { return l.workerId === w.id; });
+      });
+      var addPanel =
+        '<div id="addRow" class="add-panel" hidden>' +
+          '<div class="grid g-4">' +
+            '<div class="field"><label>עובד/ת</label><select id="aWorker">' +
+              assignable.map(function (w) {
+                return '<option value="' + w.id + '">' + ui.esc(w.name) +
+                  (w.tz ? ' · ' + w.tz : '') + '</option>';
+              }).join('') +
+            '</select><span class="hint">' + assignable.length + ' עובדים זמינים לשיבוץ · ' +
+              '<a href="#/worker-new">עובד חדש</a></span></div>' +
+            '<div class="field"><label>כניסה</label>' +
+              '<input type="text" id="aIn" value="' + (cfg.scheduleMode === 'required' ? cfg.requiredIn : '07:00') + '"></div>' +
+            '<div class="field"><label>יציאה</label>' +
+              '<input type="text" id="aOut" value="' + (cfg.scheduleMode === 'required' ? cfg.requiredOut : '15:30') + '"></div>' +
+            '<div class="field"><label>מסיע</label>' +
+              '<input type="text" id="aCarrier" list="carrierList2" placeholder="לפי ברירת המחדל של העובד/ת">' +
+              '<datalist id="carrierList2">' + ctx.data.carriers.map(function (c) {
+                return '<option value="' + ui.esc(c) + '">';
+              }).join('') + '</datalist></div>' +
+          '</div>' +
+          '<div style="height:12px"></div>' +
+          '<button class="btn primary" id="aSave">שיבוץ ליום זה</button> ' +
+          '<button class="btn ghost" id="aCancel">ביטול</button>' +
+        '</div>';
+
       var workersCard = ui.card('עלות עובדים מפורטת', d.workers + ' עובדים ביום זה',
-        '<div style="padding:0 0 14px">' + scheduleNote + '</div>' +
+        '<div style="padding:0 0 14px">' + scheduleNote + addPanel + '</div>' +
         ui.table(cols, rows, { foot: foot }),
-        { actions: '<button class="btn sm" data-csv="day">ייצוא CSV</button>' });
+        { actions: '<button class="btn sm primary" id="btnAdd">הוספת עובד ליום</button> ' +
+                   '<button class="btn sm" data-csv="day">ייצוא CSV</button>' });
 
       /* --- transport --- */
       var tCols = [
@@ -6223,10 +6568,57 @@ window.M.DATA = {
         '<div class="stat-line"><span class="k">מחיר ליחידה לאיזון</span><span class="v">' +
           (d.breakEvenPrice ? f.money(d.breakEvenPrice, 3) : '—') + '</span></div>' +
         '<div class="stat-line"><span class="k">תפוקה לשעת עבודה</span><span class="v">' +
-          (d.unitsPerWorkHour ? f.num(d.unitsPerWorkHour, 0) + ' יח׳' : '—') + '</span></div>');
+          (d.unitsPerWorkHour ? f.num(d.unitsPerWorkHour, 0) + ' יח׳' : '—') + '</span></div>' +
+        '<div style="height:14px"></div>' +
+        '<div class="field"><label>' + (d.hasUnits ? 'עדכון סה״כ ייצור ליום' : 'הזנת סה״כ ייצור ליום') + '</label>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input type="number" id="uVal" step="1" min="0" value="' +
+            (d.hasUnits ? d.units : '') + '" placeholder="כמות מדבקות">' +
+          '<button class="btn primary" id="uSave">שמירה</button>' +
+        '</div><span class="hint">' +
+          (d.hasUnits ? 'מעדכן את ההכנסה והרווח של היום מיידית'
+                      : 'ליום זה חסר סה״כ ייצור בגיליון — הזנת המספר תשלים את חישוב הרווח') +
+        '</span></div>');
 
       mount.innerHTML = nav + kpis + '<div style="height:18px"></div>' + workersCard +
         '<div style="height:18px"></div><div class="grid g-2">' + transportCard + pnlCard + '</div>';
+
+      /* --- wiring: assign worker, remove assignment, day production --- */
+      var $ = function (id) { return mount.querySelector('#' + id); };
+      var panel = $('addRow');
+
+      $('btnAdd').addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) $('aWorker').focus();
+      });
+      $('aCancel').addEventListener('click', function () { panel.hidden = true; });
+
+      $('aSave').addEventListener('click', function () {
+        var id = $('aWorker').value;
+        if (!id) return;
+        var w = null;
+        ctx.data.workers.forEach(function (x) { if (x.id === id) w = x; });
+        M.store.addShift({
+          date: d.date, workerId: id,
+          'in': $('aIn').value.trim() || '07:00',
+          out: $('aOut').value.trim() || '15:30',
+          team: w && w.team ? w.team : '',
+          carrier: $('aCarrier').value.trim() || (w && w.carrier ? w.carrier : 'עצמאי'),
+          dept: 'כללי'
+        });
+      });
+
+      Array.prototype.forEach.call(mount.querySelectorAll('.rm-shift'), function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          M.store.removeShift(a.getAttribute('data-shift'));
+        });
+      });
+
+      $('uSave').addEventListener('click', function () {
+        M.store.setDayUnits(d.date, $('uVal').value === '' ? null : $('uVal').value);
+      });
 
       ui.bindCsv(mount, {
         day: function () {
@@ -6313,6 +6705,9 @@ window.M.DATA = {
           __cls: 'clickable',
           __attrs: 'onclick="location.hash=\'#/worker/' + w.id + '\'"',
           name: '<span class="strong">' + ui.esc(w.name) + '</span>' +
+                (w.added ? ' ' + ui.badge('נוסף במערכת', 'pos') : '') +
+                (w.edited ? ' ' + ui.badge('עודכן', 'info') : '') +
+                (!w.active ? ' ' + ui.badge('לא פעיל', 'warn') : '') +
                 (w.aliases && w.aliases.length ? ' ' + ui.badge('אוחד ' + (w.aliases.length + 1) + ' כתיבים', 'info') : ''),
           tz: w.tz ? '<span class="num muted">' + w.tz + '</span>' : ui.badge('חסר', 'warn'),
           team: teams.length ? '<span class="muted">' + ui.esc(teams.join(', ')) + '</span>' : null,
@@ -6353,6 +6748,7 @@ window.M.DATA = {
           return '<option value="' + o[0] + '"' + (state.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
         }).join('') + '</select></div>' +
         '<button class="btn sm" data-csv="workers" style="margin-bottom:1px">ייצוא CSV</button>' +
+        '<a class="btn sm primary" href="#/worker-new" style="margin-bottom:1px">+ עובד חדש</a>' +
         '</div>';
 
       var missingId = all.filter(function (w) { return !w.tz; }).length;
@@ -6448,27 +6844,22 @@ window.M.DATA = {
                'שכר ' + f.money(w.cost) + ' · הסעות ' + f.money(w.transport), { accent: true }) +
         '</div>';
 
+      if (!w.days) {
+        mount.innerHTML =
+          '<div class="crumb"><a href="#/workers">עובדים</a> ← ' + ui.esc(w.name) + '</div>' +
+          kpis + '<div style="height:18px"></div>' +
+          ui.card('פרטי עובד', null, identityHtml(w, ctx, ui) +
+            '<div style="height:14px"></div>' +
+            ui.notice('העובד/ת נוסף/ה למאגר אך טרם שובץ/ה ליום עבודה, ולכן אינו/ה משפיע/ה על ' +
+              'הרווח וההפסד. לשיבוץ: פתחו יום ב<a href="#/pnl">רווח והפסד יומי</a> ולחצו ' +
+              '"הוספת עובד ליום".', '', 'ℹ'),
+            { actions: '<a class="btn sm" href="#/worker-edit/' + w.id + '">עריכה</a>' });
+        return;
+      }
+
       /* identity card */
-      var aliases = (w.aliases || []);
-      var idCard = ui.card('פרטי עובד', null,
-        '<div class="stat-line"><span class="k">שם</span><span class="v">' + ui.esc(w.name) + '</span></div>' +
-        '<div class="stat-line"><span class="k">ת.ז</span><span class="v">' +
-          (w.tz ? '<span class="num">' + w.tz + '</span>'
-                : ui.badge('חסר בגיליון', 'warn')) + '</span></div>' +
-        '<div class="stat-line"><span class="k">כתיבים שאוחדו</span><span class="v">' +
-          (aliases.length ? ui.esc(aliases.join(' · ')) : '<span class="muted">—</span>') + '</span></div>' +
-        '<div class="stat-line"><span class="k">צוות</span><span class="v">' +
-          (Object.keys(w.teams).join(', ') || '<span class="muted">—</span>') + '</span></div>' +
-        '<div class="stat-line"><span class="k">מסיעים</span><span class="v">' +
-          Object.keys(w.carriers).map(function (c) {
-            return ui.esc(c) + ' <span class="muted">(' + w.carriers[c] + ')</span>';
-          }).join(' · ') + '</span></div>' +
-        '<div class="stat-line"><span class="k">אתר</span><span class="v">' +
-          ui.esc(ctx.data.site.name) + '</span></div>' +
-        (aliases.length
-          ? '<div style="margin-top:12px">' + ui.notice('הרשומה אוחדה מכמה כתיבים של אותו שם בגיליון. ' +
-              'במערכת אמיתית האיחוד נעשה לפי ת.ז ונשמר לצמיתות.', '', 'ℹ') + '</div>'
-          : ''));
+      var idCard = ui.card('פרטי עובד', null, identityHtml(w, ctx, ui),
+        { actions: '<a class="btn sm" href="#/worker-edit/' + w.id + '">עריכה</a>' });
 
       /* cost split */
       var costCard = ui.card('פירוט עלות', 'לפי מדרג השעות הנוספות של האתר',
@@ -6560,12 +6951,273 @@ window.M.DATA = {
     }
   };
 
+  /** Identity block — shared by the full file and the "no shifts yet" short form. */
+  function identityHtml(w, ctx, ui) {
+    var aliases = (w.aliases || []);
+    var src = w.worker || w;
+    var line = function (k, v) {
+      return '<div class="stat-line"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+    };
+    return line('שם', ui.esc(w.name) +
+                (w.added ? ' ' + ui.badge('נוסף במערכת', 'pos') : '') +
+                (w.edited ? ' ' + ui.badge('עודכן', 'info') : '')) +
+      line('ת.ז', w.tz
+        ? '<span class="num">' + w.tz + '</span>' +
+          (M.store.validId(w.tz) ? '' : ' ' + ui.badge('ספרת ביקורת שגויה', 'warn'))
+        : ui.badge('חסר בגיליון', 'warn')) +
+      (src.phone ? line('טלפון', '<span class="num">' + ui.esc(src.phone) + '</span>') : '') +
+      line('כתיבים שאוחדו',
+        aliases.length ? ui.esc(aliases.join(' · ')) : '<span class="muted">—</span>') +
+      line('צוות', Object.keys(w.teams).join(', ') || '<span class="muted">—</span>') +
+      line('מסיעים', Object.keys(w.carriers).map(function (c) {
+        return ui.esc(c) + (w.carriers[c] ? ' <span class="muted">(' + w.carriers[c] + ')</span>' : '');
+      }).join(' · ') || '<span class="muted">—</span>') +
+      line('סטטוס', w.active === false ? ui.badge('לא פעיל', 'warn') : ui.badge('פעיל', 'pos')) +
+      line('אתר', ui.esc(ctx.data.site.name)) +
+      (src.notes ? line('הערות', ui.esc(src.notes)) : '') +
+      (src.createdAt ? line('נוסף בתאריך', M.fmt.date(src.createdAt)) : '') +
+      (aliases.length
+        ? '<div style="margin-top:12px">' + ui.notice('הרשומה אוחדה מכמה כתיבים של אותו שם בגיליון. ' +
+            'במערכת אמיתית האיחוד נעשה לפי ת.ז ונשמר לצמיתות.', '', 'ℹ') + '</div>'
+        : '');
+  }
+
   function find(ctx) {
     var id = ctx.params[0];
     var all = M.calc.workerTotals(ctx.days, ctx.data);
     var found = null;
     all.forEach(function (w) { if (w.id === id) found = w; });
     return found;
+  }
+})(window.M = window.M || {});
+
+</script>
+<script>
+/* ---- src/views/workerform.js ---- */
+/* View: create / edit a worker.
+   Same form both ways — a new worker, or corrections to one that came from the
+   sheet (filling in a missing ת.ז is the common case: 20 of 32 arrived without one). */
+(function (M) {
+  'use strict';
+
+  M.views = M.views || {};
+
+  M.views.workerform = {
+    title: function (ctx) { return ctx.path === 'worker-new' ? 'עובד חדש' : 'עריכת עובד'; },
+    sub: function (ctx) {
+      return ctx.path === 'worker-new'
+        ? 'הוספת עובד למאגר — התעריף נכנס לחישוב מיד עם שיוך ליום עבודה'
+        : 'עדכון פרטי עובד קיים. הנתון המקורי מהגיליון נשמר ומוצג לצד השינוי.';
+    },
+
+    render: function (ctx, mount) {
+      var ui = M.ui, f = M.fmt, cfg = ctx.cfg;
+      var isNew = ctx.path === 'worker-new';
+      var w = null;
+      if (!isNew) {
+        ctx.data.workers.forEach(function (x) { if (x.id === ctx.params[0]) w = x; });
+        if (!w) {
+          mount.innerHTML = '<div class="card"><div class="empty">העובד לא נמצא. ' +
+            '<a href="#/workers">חזרה למאגר</a></div></div>';
+          return;
+        }
+      }
+
+      var rateOverride = w ? cfg.workerRates[w.id] : undefined;
+      var teams = ctx.data.teams;
+      var carriers = ctx.data.carriers;
+
+      function opts(list, sel, blank) {
+        return (blank ? '<option value="">' + blank + '</option>' : '') +
+          list.map(function (x) {
+            return '<option value="' + ui.esc(x) + '"' + (sel === x ? ' selected' : '') + '>' +
+              ui.esc(x) + '</option>';
+          }).join('');
+      }
+
+      var identity =
+        '<div class="grid g-3">' +
+          fld('שם מלא <span class="neg">*</span>',
+              '<input type="text" id="fName" value="' + ui.esc(w ? w.name : '') + '" ' +
+              'placeholder="שם ושם משפחה" autocomplete="off">',
+              'כפי שיופיע בכל הדוחות') +
+          fld('תעודת זהות',
+              '<input type="text" id="fTz" inputmode="numeric" value="' + ui.esc(w ? w.tz : '') + '" ' +
+              'placeholder="9 ספרות">',
+              '<span id="tzHint">המפתח לאיחוד העובד/ת בין האתרים</span>') +
+          fld('טלפון',
+              '<input type="text" id="fPhone" inputmode="tel" value="' +
+              ui.esc(w && w.phone ? w.phone : '') + '" placeholder="05X-XXXXXXX">',
+              'לשליחת סידור עבודה בהמשך') +
+        '</div>' +
+        '<div style="height:14px"></div>' +
+        '<div class="grid g-3">' +
+          fld('צוות',
+              '<input type="text" id="fTeam" list="teamList" value="' +
+              ui.esc(w && w.team ? w.team : '') + '" placeholder="ללא שיוך">' +
+              '<datalist id="teamList">' + opts(teams, null) + '</datalist>',
+              'אפשר לבחור מהרשימה או להקליד צוות חדש') +
+          fld('מסיע ברירת מחדל',
+              '<input type="text" id="fCarrier" list="carrierList" value="' +
+              ui.esc(w && w.carrier ? w.carrier : '') + '" placeholder="בחרו מסיע">' +
+              '<datalist id="carrierList">' + opts(carriers, null) + '</datalist>',
+              'מסיע חדש ייווצר עם תעריף מונח של ' + f.money(30) + ' לעובד') +
+          fld('סטטוס',
+              '<select id="fActive">' +
+              '<option value="1"' + (!w || w.active !== false ? ' selected' : '') + '>פעיל</option>' +
+              '<option value="0"' + (w && w.active === false ? ' selected' : '') + '>לא פעיל</option>' +
+              '</select>', 'עובד לא פעיל אינו מוצע לשיבוץ ליום עבודה') +
+        '</div>';
+
+      var salary =
+        '<div class="grid g-3">' +
+          fld('שכר לשעה',
+              '<select id="fRateKind">' +
+              '<option value="base"' + (rateOverride === undefined ? ' selected' : '') + '>' +
+                'תעריף בסיס של האתר — ' + f.money(cfg.baseRate) + '</option>' +
+              '<option value="custom"' + (rateOverride !== undefined ? ' selected' : '') + '>' +
+                'תעריף חריג לעובד/ת</option>' +
+              '</select>', 'סדר הקדימות: תעריף חריג גובר על תעריף הבסיס') +
+          fld('תעריף חריג (₪ לשעה)',
+              '<input type="number" step="0.5" min="0" id="fRate" value="' +
+              (rateOverride === undefined ? cfg.baseRate : rateOverride) + '"' +
+              (rateOverride === undefined ? ' disabled' : '') + '>',
+              'נשמר בספר התעריפים יחד עם החריגים הקיימים') +
+          fld('עלות יום מלא',
+              '<div id="dayCost" class="value" style="font-size:20px;padding-top:4px"></div>',
+              'לפי יום ' + cfg.requiredIn + '–' + cfg.requiredOut + ' ומדרג 125%/150%') +
+        '</div>' +
+        '<div style="height:14px"></div>' +
+        fld('הערות', '<input type="text" id="fNotes" value="' +
+            ui.esc(w && w.notes ? w.notes : '') + '" placeholder="מיומנויות, אישורים, הערות משרד">', '');
+
+      var origin = '';
+      if (w && !w.added) {
+        origin = ui.notice('רשומה זו הגיעה מגיליון האתר. השינויים נשמרים כשכבת תיקון מעליה — ' +
+          'הגיליון המקורי נשאר כפי שיובא, וניתן לראות את הפער במסך <a href="#/quality">איכות נתונים</a>.',
+          '', 'ℹ');
+      }
+
+      var actions =
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+        '<button class="btn primary" id="fSave">' + (isNew ? 'הוספת עובד' : 'שמירת שינויים') + '</button>' +
+        '<a class="btn ghost" href="#' + (w ? '/worker/' + w.id : '/workers') + '">ביטול</a>' +
+        (w && w.added ? '<button class="btn" id="fDelete" style="margin-inline-start:auto">' +
+          'מחיקת העובד/ת</button>' : '') +
+        '</div>' +
+        '<div id="fErr" style="margin-top:12px"></div>';
+
+      mount.innerHTML =
+        '<div class="crumb"><a href="#/workers">עובדים</a> ← ' +
+          (isNew ? 'עובד חדש' : ui.esc(w.name)) + '</div>' +
+        (origin ? origin + '<div style="height:16px"></div>' : '') +
+        ui.card('פרטי עובד', 'שדה חובה מסומן ב-*', identity) +
+        ui.card('שכר', 'התעריף נכנס לחישוב הרווח וההפסד ברגע שהעובד/ת משובץ/ת ליום עבודה', salary) +
+        ui.card(null, null, actions);
+
+      /* --- live bits --- */
+      var $ = function (id) { return mount.querySelector('#' + id); };
+
+      function currentRate() {
+        return $('fRateKind').value === 'custom' ? Number($('fRate').value) || 0 : cfg.baseRate;
+      }
+      function paintDayCost() {
+        var hours = Math.max(0, f.toHours(cfg.requiredOut) - f.toHours(cfg.requiredIn));
+        var s = M.calc.splitHours(hours, cfg.ot);
+        var r = currentRate();
+        $('dayCost').innerHTML = f.money(s.h100 * r + s.h125 * r * cfg.ot.mult125 +
+                                         s.h150 * r * cfg.ot.mult150);
+      }
+      function paintTz() {
+        var tz = $('fTz').value.replace(/\D/g, '');
+        var hint = $('tzHint');
+        if (!tz) {
+          hint.innerHTML = 'המפתח לאיחוד העובד/ת בין האתרים';
+          hint.className = 'hint';
+          return;
+        }
+        var dup = null;
+        ctx.data.workers.forEach(function (x) {
+          if (x.tz === tz && (!w || x.id !== w.id)) dup = x;
+        });
+        if (dup) {
+          hint.innerHTML = '⚠ ת.ז זו כבר רשומה ל' + ui.esc(dup.name);
+          hint.className = 'hint neg';
+        } else if (!M.store.validId(tz)) {
+          hint.innerHTML = '⚠ ספרת ביקורת שגויה — ניתן לשמור, יסומן לבדיקה';
+          hint.className = 'hint neg';
+        } else {
+          hint.innerHTML = '✔ מספר זהות תקין';
+          hint.className = 'hint pos';
+        }
+      }
+
+      $('fRateKind').addEventListener('change', function () {
+        $('fRate').disabled = this.value !== 'custom';
+        if (this.value === 'base') $('fRate').value = cfg.baseRate;
+        paintDayCost();
+      });
+      $('fRate').addEventListener('input', paintDayCost);
+      $('fTz').addEventListener('input', paintTz);
+      paintDayCost();
+      paintTz();
+
+      $('fSave').addEventListener('click', function () {
+        // read the whole form first: saving re-renders the view and detaches these fields
+        var rec = {
+          name: $('fName').value.trim(),
+          tz: $('fTz').value.replace(/\D/g, ''),
+          phone: $('fPhone').value.trim(),
+          team: $('fTeam').value.trim(),
+          carrier: $('fCarrier').value.trim(),
+          active: $('fActive').value === '1',
+          notes: $('fNotes').value.trim()
+        };
+        var customRate = $('fRateKind').value === 'custom'
+          ? (Number($('fRate').value) || cfg.baseRate) : null;
+
+        if (!rec.name) {
+          $('fErr').innerHTML = ui.notice('חובה להזין שם עובד.', 'warn', '⚠');
+          $('fName').focus();
+          return;
+        }
+
+        var id = isNew ? M.store.addWorker(rec).id : (M.store.updateWorker(w.id, rec), w.id);
+
+        if (customRate !== null) {
+          var patch = {};
+          patch[id] = customRate;
+          M.config.set({ workerRates: patch });
+        } else if (M.config.get().workerRates[id] !== undefined) {
+          delete M.config.get().workerRates[id];
+          M.config.set({});
+        }
+        location.hash = '#/worker/' + id;
+      });
+
+      if ($('fDelete')) {
+        $('fDelete').addEventListener('click', function () {
+          var btn = this;
+          if (btn.getAttribute('data-armed') !== '1') {
+            btn.setAttribute('data-armed', '1');
+            btn.textContent = 'לחצו שוב לאישור המחיקה';
+            btn.className = 'btn neg';
+            return;
+          }
+          if (M.config.get().workerRates[w.id] !== undefined) {
+            delete M.config.get().workerRates[w.id];   // don't leave an orphan rate behind
+            M.config.set({});
+          }
+          M.store.removeWorker(w.id);
+          location.hash = '#/workers';
+        });
+      }
+    }
+  };
+
+  function fld(label, control, hint) {
+    return '<div class="field"><label>' + label + '</label>' + control +
+      (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>';
   }
 })(window.M = window.M || {});
 
@@ -6664,13 +7316,15 @@ window.M.DATA = {
         '<div class="grid g-3">' +
           field('תעריף בסיס לשעה (₪)', numInput('baseRate', cfg.baseRate, 0.5), 'חל על כל מי שאין לו תעריף חריג') +
           '<div class="field"><label>חריגים פעילים</label><div style="padding-top:6px">' +
-            (Object.keys(cfg.workerRates).length
-              ? Object.keys(cfg.workerRates).map(function (id) {
-                  var w = null;
-                  workers.forEach(function (x) { if (x.id === id) w = x; });
-                  return ui.badge((w ? w.name : id) + ' · ' + f.money(cfg.workerRates[id]), 'info');
-                }).join(' ')
-              : '<span class="muted">אין</span>') +
+            (function () {
+              // a rate can outlive its worker (deleted demo record) — show only live ones
+              var live = Object.keys(cfg.workerRates).map(function (id) {
+                var w = null;
+                workers.forEach(function (x) { if (x.id === id) w = x; });
+                return w ? ui.badge(w.name + ' · ' + f.money(cfg.workerRates[id]), 'info') : '';
+              }).filter(Boolean);
+              return live.length ? live.join(' ') : '<span class="muted">אין</span>';
+            })() +
           '</div></div>' +
           '<div class="field"><label>איפוס</label>' +
           '<button class="btn" id="resetBtn">החזר לתעריפי הדרישות</button>' +
@@ -6716,8 +7370,37 @@ window.M.DATA = {
           'שאר המסיעים בגיליון (שאדי, נמר, מאריא, כריסתין) חושבו לפי 30 ₪ לעובד כהנחת עבודה — ' +
           'יש לאשר מול המשרד.', 'warn', '⚠'), { flush: false });
 
+      /* --- records created in the app --- */
+      var c = M.store.counts();
+      var storeCard = ui.card('רשומות שנוספו במערכת',
+        'נשמרות בדפדפן בלבד, מעל הגיליון המיובא — הגיליון עצמו לעולם אינו משתנה',
+        '<div class="grid g-4">' +
+          miniStat('עובדים חדשים', c.workers) +
+          miniStat('עובדים שעודכנו', c.patches) +
+          miniStat('שיבוצי נוכחות', c.shifts) +
+          miniStat('ימים עם ייצור שהוזן', c.dayUnits) +
+        '</div>' +
+        '<div style="height:14px"></div>' +
+        (M.store.isEmpty()
+          ? ui.notice('טרם נוספו רשומות. להוספת עובד: <a href="#/workers">מאגר עובדים</a> ← ' +
+              '"עובד חדש". לשיבוץ ליום: <a href="#/pnl">רווח והפסד יומי</a> ← בחירת יום ← ' +
+              '"הוספת עובד ליום".', '', 'ℹ')
+          : '<button class="btn" id="storeReset">מחיקת כל הרשומות שנוספו</button>' +
+            '<span class="hint" style="margin-inline-start:10px">מחזיר את המערכת לנתוני הגיליון בלבד</span>'));
+
       mount.innerHTML = impact + '<div style="height:18px"></div>' +
-        dayCard + revCard + ratesCard + carriersCard;
+        dayCard + revCard + ratesCard + carriersCard + storeCard;
+
+      var sr = mount.querySelector('#storeReset');
+      if (sr) sr.addEventListener('click', function () {
+        if (sr.getAttribute('data-armed') !== '1') {
+          sr.setAttribute('data-armed', '1');
+          sr.className = 'btn neg';
+          sr.textContent = 'לחצו שוב לאישור';
+          return;
+        }
+        M.store.reset();
+      });
 
       /* --- wiring --- */
       Array.prototype.forEach.call(mount.querySelectorAll('[data-cfg]'), function (input) {
@@ -6742,6 +7425,12 @@ window.M.DATA = {
     var s = M.calc.splitHours(dayHours(cfg), cfg.ot);
     return s.h100 * cfg.baseRate + s.h125 * cfg.baseRate * cfg.ot.mult125 +
            s.h150 * cfg.baseRate * cfg.ot.mult150;
+  }
+
+  function miniStat(label, value) {
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px">' +
+      '<div class="muted" style="font-size:12px">' + label + '</div>' +
+      '<div style="font-size:20px;font-weight:680">' + value + '</div></div>';
   }
 
   function field(label, control, hint) {
@@ -6907,12 +7596,16 @@ window.M.DATA = {
     { path: 'day', view: 'day' },
     { path: 'workers', view: 'workers', nav: 'עובדים', icon: '☰' },
     { path: 'worker', view: 'worker' },
+    { path: 'worker-new', view: 'workerform' },
+    { path: 'worker-edit', view: 'workerform' },
     { path: 'rates', view: 'rates', nav: 'תעריפים והגדרות', icon: '⚙', group: 'ניהול' },
     { path: 'quality', view: 'quality', nav: 'איכות נתונים', icon: '⚑', group: 'ניהול' }
   ];
 
-  var data = M.DATA;
+  /* imported sheet + everything created in the app, layered */
+  var data = M.store.apply(M.DATA);
   var cfg = M.config.load(data);
+  M.config.ensureCarriers(data);
 
   function parseHash() {
     var raw = (location.hash || '#/').replace(/^#\/?/, '');
@@ -6984,7 +7677,8 @@ window.M.DATA = {
 
     var days = M.calc.run(data, cfg);
     var ctx = {
-      data: data, cfg: cfg, days: days, totals: M.calc.totals(days), params: r.params
+      data: data, cfg: cfg, days: days, totals: M.calc.totals(days),
+      params: r.params, path: r.route.path
     };
 
     document.getElementById('viewTitle').textContent =
@@ -7010,6 +7704,12 @@ window.M.DATA = {
   });
 
   M.config.onChange(function (next) { cfg = next; render(); });
+
+  M.store.onChange(function () {
+    data = M.store.apply(M.DATA);
+    M.config.ensureCarriers(data);
+    render();
+  });
 
   document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('siteName').textContent = data.site.name;

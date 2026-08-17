@@ -70,6 +70,23 @@ This is not a bug in the demo — it is what their own sheet says.
 
 ---
 
+### 4.5 · Add a worker (1.5 min) — the system works, it doesn't just display
+
+- `עובדים` → **"+ עובד חדש"**: name, ID, phone, team, carrier — and **hourly pay**:
+  either the site base rate or a worker-specific exception. The full-day cost
+  updates as you type.
+- The ID is checked live: a bad check digit, or a number already registered to
+  someone else, is flagged immediately.
+- Put them to work: `רווח והפסד יומי` → pick a day → **"הוספת עובד ליום"** →
+  that day's cost and profit move on the spot.
+- And to close the gap: open **30/07/26**, enter the production total, and the day
+  that was marked "missing" becomes a fully costed day.
+
+> "Everything added here is labelled, so it's always clear what came from your
+> sheet and what was entered in the system. The original sheet never changes."
+
+---
+
 ### 5 · Data quality — `איכות נתונים` (1.5 min) — why a system is needed at all
 
 - **20 of 32 workers have no ID number.** Without it, a worker cannot be merged
