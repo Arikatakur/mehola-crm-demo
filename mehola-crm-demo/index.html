@@ -10,6 +10,7 @@
 <body>
 
 <div class="app">
+  <button class="nav-backdrop" id="navBackdrop" aria-label="סגירת תפריט" tabindex="-1"></button>
   <aside class="side">
     <div class="brand">
       <img src="assets/logo.jpg" alt="Mehola Group">
@@ -22,6 +23,23 @@
     <nav id="nav"></nav>
 
     <div class="side-foot">
+      <div class="theme-picker">
+        <button class="theme-toggle" id="themeToggle" aria-expanded="false" aria-controls="themePanel">
+          <span class="theme-icon" aria-hidden="true">◉</span>
+          <span><strong>צבע ורקע</strong><small id="themeName">כחול מודרני</small></span>
+          <span class="theme-chevron" aria-hidden="true">⌃</span>
+        </button>
+        <div class="theme-panel" id="themePanel" hidden>
+          <span class="theme-label">בחירת ערכת נושא</span>
+          <div class="theme-options" role="radiogroup" aria-label="ערכת צבעים">
+            <button class="theme-option" data-theme="blue" role="radio" aria-label="כחול מודרני"><i style="--swatch:#2563eb"></i><span>כחול</span></button>
+            <button class="theme-option" data-theme="emerald" role="radio" aria-label="ירוק טבעי"><i style="--swatch:#059669"></i><span>ירוק</span></button>
+            <button class="theme-option" data-theme="violet" role="radio" aria-label="סגול יצירתי"><i style="--swatch:#7c3aed"></i><span>סגול</span></button>
+            <button class="theme-option" data-theme="sunset" role="radio" aria-label="כתום חם"><i style="--swatch:#ea580c"></i><span>כתום</span></button>
+            <button class="theme-option" data-theme="graphite" role="radio" aria-label="אפור אלגנטי"><i style="--swatch:#475569"></i><span>אפור</span></button>
+          </div>
+        </div>
+      </div>
       <div class="site-chip">
         <span class="dot"></span>
         <div>
@@ -35,17 +53,29 @@
 
   <main class="main">
     <header class="topbar">
-      <div>
+      <button class="mobile-menu" id="mobileMenu" aria-label="פתיחת תפריט" aria-expanded="false">☰</button>
+      <div class="topbar-copy">
         <h1 id="viewTitle">—</h1>
         <p id="viewSub"></p>
       </div>
       <div class="topbar-actions">
         <div class="scenario" id="scenario"></div>
-        <button class="btn ghost" id="btnPrint">הדפסה</button>
+        <button class="btn help-main" id="screenHelp"><span aria-hidden="true">?</span> עזרה במסך</button>
+        <button class="btn ghost" id="btnPrint"><span aria-hidden="true">↗</span> הדפסה</button>
       </div>
     </header>
     <div class="view" id="view"></div>
   </main>
+</div>
+
+<div class="help-overlay" id="helpOverlay" hidden>
+  <section class="help-drawer" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="help-drawer-head">
+      <div><span class="help-kicker">מרכז העזרה</span><h2 id="helpTitle">עזרה</h2></div>
+      <button class="help-close" id="helpClose" aria-label="סגירת העזרה">×</button>
+    </div>
+    <div class="help-content" id="helpContent"></div>
+  </section>
 </div>
 
 <script src="src/data/rosman.js"></script>

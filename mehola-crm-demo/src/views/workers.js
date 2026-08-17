@@ -4,7 +4,35 @@
 
   M.views = M.views || {};
 
-  var state = { q: '', carrier: '', sort: 'cost' };
+  var state = {
+    q: '', carrier: '', team: '', status: '', issue: '', minDays: '', minHours: '',
+    sort: 'cost', dir: 'desc', compact: false, cols: {}
+  };
+
+  function columnValue(w, key) {
+    var values = {
+      name: w.name, tz: w.tz || '', team: Object.keys(w.teams).join(', '),
+      carrier: Object.keys(w.carriers).join(', '), days: w.days, hours: w.hours,
+      ot: w.h125 + w.h150, rate: w.rate, cost: w.cost,
+      transport: w.transport, total: w.cost + w.transport
+    };
+    return values[key];
+  }
+
+  function matchesColumn(value, query) {
+    query = String(query || '').trim();
+    if (query.slice(0, 2) === '::') return String(value || '') === query.slice(2);
+    query = query.replace(/^≥/, '>=').replace(/^≤/, '<=');
+    if (!query) return true;
+    if (typeof value === 'number') {
+      var m = query.match(/^(>=|<=|>|<|=)?\s*(-?[\d,.]+)$/);
+      if (!m) return String(value).indexOf(query) !== -1;
+      var n = Number(m[2].replace(/,/g, '')), op = m[1] || '=';
+      return op === '>' ? value > n : op === '<' ? value < n :
+        op === '>=' ? value >= n : op === '<=' ? value <= n : value === n;
+    }
+    return String(value || '').toLocaleLowerCase('he').indexOf(query.toLocaleLowerCase('he')) !== -1;
+  }
 
   M.views.workers = {
     title: 'עובדים',
@@ -18,8 +46,21 @@
       var all = M.calc.workerTotals(ctx.days, ctx.data);
 
       var carriers = ctx.data.carriers;
+      var teams = ctx.data.teams.slice().sort(function (a, b) { return a.localeCompare(b, 'he'); });
       var filtered = all.filter(function (w) {
         if (state.carrier && !w.carriers[state.carrier]) return false;
+        if (state.team && !w.teams[state.team]) return false;
+        if (state.status === 'active' && w.active === false) return false;
+        if (state.status === 'inactive' && w.active !== false) return false;
+        if (state.issue === 'missing-id' && w.tz) return false;
+        if (state.issue === 'overtime' && !(w.h125 + w.h150)) return false;
+        if (state.issue === 'edited' && !w.edited && !w.added) return false;
+        if (state.minDays !== '' && w.days < Number(state.minDays)) return false;
+        if (state.minHours !== '' && w.hours < Number(state.minHours)) return false;
+        var colKeys = Object.keys(state.cols);
+        for (var ci = 0; ci < colKeys.length; ci++) {
+          if (!matchesColumn(columnValue(w, colKeys[ci]), state.cols[colKeys[ci]])) return false;
+        }
         if (state.q) {
           var hay = (w.name + ' ' + (w.aliases || []).join(' ') + ' ' + (w.tz || '')).toLowerCase();
           if (hay.indexOf(state.q.toLowerCase()) === -1) return false;
@@ -28,12 +69,20 @@
       });
 
       var sorters = {
-        cost: function (a, b) { return b.cost - a.cost; },
-        days: function (a, b) { return b.days - a.days; },
-        hours: function (a, b) { return b.hours - a.hours; },
-        name: function (a, b) { return a.name.localeCompare(b.name, 'he'); }
+        name: function (w) { return w.name; }, tz: function (w) { return w.tz || ''; },
+        team: function (w) { return Object.keys(w.teams).join(','); },
+        carrier: function (w) { return Object.keys(w.carriers).join(','); },
+        days: function (w) { return w.days; }, hours: function (w) { return w.hours; },
+        ot: function (w) { return w.h125 + w.h150; }, rate: function (w) { return w.rate; },
+        cost: function (w) { return w.cost; }, transport: function (w) { return w.transport; },
+        total: function (w) { return w.cost + w.transport; }
       };
-      filtered = filtered.slice().sort(sorters[state.sort] || sorters.cost);
+      filtered = filtered.slice().sort(function (a, b) {
+        var get = sorters[state.sort] || sorters.cost, av = get(a), bv = get(b), cmp;
+        if (typeof av === 'string') cmp = av.localeCompare(bv, 'he', { numeric: true });
+        else cmp = av - bv;
+        return state.dir === 'asc' ? cmp : -cmp;
+      });
 
       var cols = [
         { t: 'עובד', k: 'name' },
@@ -85,21 +134,35 @@
         total: f.money(sum(function (w) { return w.cost + w.transport; }))
       };
 
-      var controls = '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">' +
+      var hasColumnFilters = Object.keys(state.cols).some(function (k) { return state.cols[k]; });
+      var hasFilters = state.q || state.carrier || state.team || state.status || state.issue ||
+        state.minDays !== '' || state.minHours !== '' || hasColumnFilters;
+      var controls = '<div class="grid-toolbar">' +
         '<div class="field" style="width:220px"><label>חיפוש עובד / ת.ז</label>' +
         '<input type="text" id="wq" value="' + ui.esc(state.q) + '" placeholder="שם או מספר זהות"></div>' +
+        '<div class="field" style="width:150px"><label>צוות</label><select id="wt">' +
+        '<option value="">כל הצוותים</option>' + teams.map(function (t) {
+          return '<option value="' + ui.esc(t) + '"' + (state.team === t ? ' selected' : '') + '>' + ui.esc(t) + '</option>';
+        }).join('') + '</select></div>' +
         '<div class="field" style="width:170px"><label>מסיע</label><select id="wc">' +
         '<option value="">כל המסיעים</option>' +
         carriers.map(function (c) {
           return '<option value="' + ui.esc(c) + '"' + (state.carrier === c ? ' selected' : '') + '>' +
             ui.esc(c) + '</option>';
         }).join('') + '</select></div>' +
-        '<div class="field" style="width:170px"><label>מיון</label><select id="ws">' +
-        [['cost', 'עלות שכר'], ['days', 'ימי עבודה'], ['hours', 'שעות'], ['name', 'שם']].map(function (o) {
-          return '<option value="' + o[0] + '"' + (state.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
-        }).join('') + '</select></div>' +
-        '<button class="btn sm" data-csv="workers" style="margin-bottom:1px">ייצוא CSV</button>' +
-        '<a class="btn sm primary" href="#/worker-new" style="margin-bottom:1px">+ עובד חדש</a>' +
+        '<div class="field" style="width:135px"><label>סטטוס</label><select id="wstatus">' +
+        '<option value="">כל הסטטוסים</option><option value="active"' + (state.status === 'active' ? ' selected' : '') + '>פעיל</option>' +
+        '<option value="inactive"' + (state.status === 'inactive' ? ' selected' : '') + '>לא פעיל</option></select></div>' +
+        '<div class="field" style="width:165px"><label>מסנן חכם</label><select id="wi">' +
+        '<option value="">ללא</option><option value="missing-id"' + (state.issue === 'missing-id' ? ' selected' : '') + '>חסרה ת.ז</option>' +
+        '<option value="overtime"' + (state.issue === 'overtime' ? ' selected' : '') + '>יש שעות נוספות</option>' +
+        '<option value="edited"' + (state.issue === 'edited' ? ' selected' : '') + '>נוסף / עודכן</option></select></div>' +
+        '<div class="field mini-filter"><label>מינ׳ ימים</label><input type="number" min="0" id="wmd" value="' + state.minDays + '"></div>' +
+        '<div class="field mini-filter"><label>מינ׳ שעות</label><input type="number" min="0" id="wmh" value="' + state.minHours + '"></div>' +
+        '<button class="btn sm" id="wcompact">' + (state.compact ? 'תצוגה מרווחת' : 'תצוגה צפופה') + '</button>' +
+        '<button class="btn sm" id="wclear"' + (hasFilters ? '' : ' disabled') + '>ניקוי מסננים</button>' +
+        '<button class="btn sm" data-csv="workers">ייצוא ' + filtered.length + ' שורות</button>' +
+        '<a class="btn sm primary" href="#/worker-new">+ עובד חדש</a>' +
         '</div>';
 
       var missingId = all.filter(function (w) { return !w.tz; }).length;
@@ -109,9 +172,43 @@
             '<a href="#/quality">ראו איכות נתונים</a>.', 'warn', '⚠')
         : '';
 
+      var resultBar = '<div class="grid-result"><strong>' + filtered.length + '</strong> מתוך ' + all.length +
+        ' עובדים' + (hasFilters ? ' · מסננים פעילים' : '') +
+        '<span>לחצו על כותרת עמודה כדי למיין</span></div>';
+
       mount.innerHTML = ui.card('מאגר עובדים', this.sub(ctx),
         controls + (note ? '<div style="height:14px"></div>' + note : '') +
-        '<div style="height:14px"></div>' + ui.table(cols, rows, { foot: foot }));
+        resultBar + '<div class="worker-grid' + (state.compact ? ' compact' : '') + '">' +
+        ui.table(cols, rows, { foot: foot }) + '</div>');
+
+      Array.prototype.forEach.call(mount.querySelectorAll('thead th'), function (th, i) {
+        var c = cols[i], active = state.sort === c.k;
+        th.innerHTML = '<button class="sort-head' + (active ? ' on' : '') + '" data-sort="' + c.k + '">' +
+          ui.esc(c.t) + '<span aria-hidden="true">' + (active ? (state.dir === 'asc' ? '↑' : '↓') : '↕') + '</span></button>';
+      });
+      var filterRow = document.createElement('tr');
+      filterRow.className = 'column-filters';
+      filterRow.innerHTML = cols.map(function (c) {
+        var numeric = !!c.n;
+        if (!numeric) {
+          var unique = [];
+          all.forEach(function (w) {
+            var value = String(columnValue(w, c.k) || '').trim();
+            if (value && unique.indexOf(value) === -1) unique.push(value);
+          });
+          unique.sort(function (a, b) { return a.localeCompare(b, 'he', { numeric: true }); });
+          return '<th><select id="wcf-' + c.k + '" data-col-filter="' + c.k +
+            '" aria-label="סינון לפי ' + ui.esc(c.t) + '"><option value="">הכול (' + unique.length + ')</option>' +
+            unique.map(function (value) {
+              return '<option value="' + ui.esc(value) + '"' +
+                (state.cols[c.k] === '::' + value ? ' selected' : '') + '>' + ui.esc(value) + '</option>';
+            }).join('') + '</select></th>';
+        }
+        return '<th><input type="text" id="wcf-' + c.k + '" data-col-filter="' + c.k + '" value="' +
+          ui.esc(state.cols[c.k] || '') + '" placeholder="למשל ≥10' +
+          '" aria-label="סינון לפי ' + ui.esc(c.t) + '"></th>';
+      }).join('');
+      mount.querySelector('thead').appendChild(filterRow);
 
       var q = mount.querySelector('#wq');
       q.addEventListener('input', function () {
@@ -123,8 +220,31 @@
       mount.querySelector('#wc').addEventListener('change', function () {
         state.carrier = this.value; M.app.rerender();
       });
-      mount.querySelector('#ws').addEventListener('change', function () {
-        state.sort = this.value; M.app.rerender();
+      mount.querySelector('#wt').addEventListener('change', function () { state.team = this.value; M.app.rerender(); });
+      mount.querySelector('#wstatus').addEventListener('change', function () { state.status = this.value; M.app.rerender(); });
+      mount.querySelector('#wi').addEventListener('change', function () { state.issue = this.value; M.app.rerender(); });
+      mount.querySelector('#wmd').addEventListener('change', function () { state.minDays = this.value; M.app.rerender(); });
+      mount.querySelector('#wmh').addEventListener('change', function () { state.minHours = this.value; M.app.rerender(); });
+      mount.querySelector('#wcompact').addEventListener('click', function () { state.compact = !state.compact; M.app.rerender(); });
+      mount.querySelector('#wclear').addEventListener('click', function () {
+        state.q = ''; state.carrier = ''; state.team = ''; state.status = ''; state.issue = '';
+        state.minDays = ''; state.minHours = ''; state.cols = {}; M.app.rerender();
+      });
+      Array.prototype.forEach.call(mount.querySelectorAll('[data-col-filter]'), function (input) {
+        input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', function () {
+          var key = this.getAttribute('data-col-filter');
+          state.cols[key] = this.tagName === 'SELECT' && this.value ? '::' + this.value : this.value;
+          M.app.rerender();
+        });
+        input.addEventListener('click', function (e) { e.stopPropagation(); });
+      });
+      Array.prototype.forEach.call(mount.querySelectorAll('[data-sort]'), function (b) {
+        b.addEventListener('click', function () {
+          var key = this.getAttribute('data-sort');
+          if (state.sort === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+          else { state.sort = key; state.dir = (key === 'name' || key === 'tz' || key === 'team' || key === 'carrier') ? 'asc' : 'desc'; }
+          M.app.rerender();
+        });
       });
 
       ui.bindCsv(mount, {
