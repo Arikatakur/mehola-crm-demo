@@ -53,7 +53,8 @@
       cost100: cost100, cost125: cost125, cost150: cost150,
       otCost: cost125 + cost150,
       cost: cost100 + cost125 + cost150,
-      srcRow: shift.srcRow
+      srcRow: shift.srcRow,
+      shiftId: shift.shiftId || null      // set only for attendance added in the app
     };
   }
 
@@ -194,9 +195,12 @@
       data.workers.forEach(function (w) {
         acc[w.id] = {
           worker: w, id: w.id, name: w.name, tz: w.tz, aliases: w.aliases,
+          added: !!w.added, edited: !!w.edited, active: w.active !== false,
           days: 0, hours: 0, h100: 0, h125: 0, h150: 0, cost: 0, otCost: 0,
-          transport: 0, rate: null, carriers: {}, teams: {}, entries: []
+          transport: 0, rate: rateFor(M.config.get(), w.id), carriers: {}, teams: {}, entries: []
         };
+        if (w.team) acc[w.id].teams[w.team] = 0;
+        if (w.carrier) acc[w.id].carriers[w.carrier] = 0;
       });
       days.forEach(function (d) {
         var perWorkerTransport = {};
@@ -216,8 +220,9 @@
           a.entries.push({ date: d.date, dayName: d.dayName, line: l, transport: t });
         });
       });
+      // workers with no shifts yet (just added in the app) stay in the list —
+      // they sort to the bottom, but they must be visible and rateable
       return Object.keys(acc).map(function (k) { return acc[k]; })
-        .filter(function (a) { return a.days > 0; })
         .sort(function (a, b) { return b.cost - a.cost; });
     },
 

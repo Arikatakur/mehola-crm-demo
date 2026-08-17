@@ -3,6 +3,45 @@
 All notable changes to the Mehola CRM demo.
 Format follows [Keep a Changelog](https://keepachangelog.com/); dates are ISO.
 
+## [0.2.0] — 2026-08-17
+
+The demo becomes usable, not just readable: workers can be added and paid, and
+attendance and production can be entered — each change recalculating the P&L.
+
+### Added
+- `src/lib/store.js` — an editable overlay on the imported dataset. New workers,
+  edits to imported ones, attendance assignments, production totals and new work
+  days are kept in `localStorage` and layered over `src/data/rosman.js` on every
+  render. The imported sheet is never mutated, and every created record is tagged
+  so it cannot be confused with source data.
+- `עובד חדש` / `עריכת עובד` screen (`src/views/workerform.js`): full name, ת.ז,
+  phone, team, default carrier, active status, notes, and hourly pay — either the
+  site base rate or a worker-specific exception, written into the same rate book
+  the client's ₪43/₪44 exceptions live in. Live cost-of-a-full-day preview,
+  Israeli ID check-digit validation, and duplicate-ID detection against the register.
+- Assign a worker to a work day, and remove an assignment, from `פירוט יום`.
+  Hours default to the active schedule; the carrier defaults to the worker's.
+- Enter or correct a day's production total from `פירוט יום` — this closes the
+  loop on the one day the sheet is missing (30/07/26), turning it from "no revenue
+  computable" into a costed, profitable-or-not day.
+- Open a new work day from `רווח והפסד יומי`, with optional production total.
+- `תעריפים והגדרות` now reports how many records were created in the app and
+  clears them in one click (two-step confirm).
+- A carrier typed into any form that has no billing rule gets the assumed
+  ₪30/worker rule rather than silently costing nothing.
+
+### Changed
+- Workers with no shifts yet stay visible in the register and the rate book, and
+  their file shows a short form explaining they are not yet in the P&L.
+- Worker file gained an edit action, phone/status/notes rows, and a check-digit
+  warning next to an invalid ת.ז.
+
+### Fixed
+- Saving a worker read the form *after* the store update had re-rendered the view,
+  so a custom hourly rate was silently dropped. Form values are now captured first.
+- Deleting a worker created in the app no longer leaves an orphaned rate override
+  behind in the rate book.
+
 ## [0.1.0] — 2026-08-17
 
 First working demo. Built in one session from the three source inputs

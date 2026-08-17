@@ -21,8 +21,18 @@ client's written requirements exactly.
 | פירוט יום | `#/day/<date>` | Worker-by-worker cost for one day (hours split 100/125/150, rate, transport share) + transport breakdown + day P&L |
 | עובדים | `#/workers` | De-duplicated worker register, searchable/filterable, with days, hours, OT, cost |
 | תיק עובד | `#/worker/<id>` | One worker: identity (incl. merged spellings), cost breakdown, monthly totals, full attendance log |
+| עובד חדש / עריכת עובד | `#/worker-new`, `#/worker-edit/<id>` | Create a worker with their hourly rate (base or exception), or correct an imported record |
 | תעריפים והגדרות | `#/rates` | The rate book — every input editable, whole period recalculates live |
 | איכות נתונים | `#/quality` | What the Excel migration found: what was auto-fixed, what needs the office to decide |
+
+The demo is also **operable**: add a worker and pay rate, assign them to a day,
+open a new day, or fill in a missing production total — each recalculates the P&L
+on the spot. Those records live in `src/lib/store.js` as a `localStorage` overlay
+on the imported dataset; the imported sheet is never mutated, and created records
+are badged (`נוסף במערכת`, `נוסף`, `עודכן`) so they can't be mistaken for source
+data. `תעריפים והגדרות` counts them and clears them in one click. **Clear them
+before a client demo** if a previous session left records behind — they are stored
+per browser, so a freshly sent `dist/` file always starts clean.
 
 **Two deliverable forms.** `dist/mehola-crm-demo.html` is a single 210 KB file with
 CSS, JS, data and logo inlined — double-click, works offline, nothing to install.
@@ -158,7 +168,13 @@ Not present, and not pretended to be:
 - WhatsApp / SendWise messaging and its audit trail.
 - The other 51 sites, hourly ("Manpower Supply") billing, departments hierarchy.
 - Real backend, database, authentication, audit trail with rollback.
-  Rate edits persist in `localStorage` only, per browser.
+  Rate edits and records created in the app persist in `localStorage` only, per
+  browser — nothing is shared between machines and nothing survives clearing site
+  data. `src/lib/store.js` is deliberately shaped as the seam where an API client
+  replaces it: same four operations, same call sites.
+- Worker-side fields a real onboarding flow needs and this form does not have:
+  bank details, contract dates, work permit / visa status, emergency contact,
+  document uploads. The form covers what the costing engine actually consumes.
 
 ---
 

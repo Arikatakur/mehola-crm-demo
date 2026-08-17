@@ -92,14 +92,42 @@
       notes += ui.notice('שורת סיכום מציגה את כל התקופה. לחיצה על שורה פותחת את פירוט היום — ' +
         'עובד־עובד, שעה־שעה, כולל חלוקת ההסעות.', '', 'ℹ');
 
-      var actions = '<button class="btn sm" data-csv="pnl">ייצוא CSV</button>';
+      var actions = '<button class="btn sm primary" id="btnNewDay">+ יום עבודה</button> ' +
+                    '<button class="btn sm" data-csv="pnl">ייצוא CSV</button>';
+
+      var today = new Date().toISOString().slice(0, 10);
+      var newDayPanel =
+        '<div id="newDay" class="add-panel" hidden>' +
+          '<div class="grid g-3">' +
+            '<div class="field"><label>תאריך</label>' +
+              '<input type="date" id="ndDate" value="' + today + '"></div>' +
+            '<div class="field"><label>סה״כ ייצור (יחידות)</label>' +
+              '<input type="number" id="ndUnits" min="0" step="1" placeholder="ניתן להשלים בהמשך"></div>' +
+            '<div class="field"><label>&nbsp;</label>' +
+              '<div><button class="btn primary" id="ndSave">פתיחת יום</button> ' +
+              '<button class="btn ghost" id="ndCancel">ביטול</button></div>' +
+              '<span class="hint">היום נפתח ריק — משבצים אליו עובדים במסך פירוט היום</span></div>' +
+          '</div>' +
+        '</div>';
 
       mount.innerHTML = strip +
         '<div style="height:18px"></div>' +
         ui.card('גיליון רווח והפסד — ' + ctx.data.site.name, this.sub(ctx),
-                '<div style="padding:0 0 14px">' + notes + '</div>' +
+                '<div style="padding:0 0 14px">' + newDayPanel + notes + '</div>' +
                 ui.table(cols, rows, { foot: foot }),
                 { flush: false, actions: actions });
+
+      var panel = mount.querySelector('#newDay');
+      mount.querySelector('#btnNewDay').addEventListener('click', function () {
+        panel.hidden = !panel.hidden;
+      });
+      mount.querySelector('#ndCancel').addEventListener('click', function () { panel.hidden = true; });
+      mount.querySelector('#ndSave').addEventListener('click', function () {
+        var date = mount.querySelector('#ndDate').value;
+        if (!date) return;
+        M.store.addDay(date, mount.querySelector('#ndUnits').value);
+        location.hash = '#/day/' + date;
+      });
 
       ui.bindCsv(mount, {
         pnl: function () {

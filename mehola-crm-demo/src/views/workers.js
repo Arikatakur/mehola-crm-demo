@@ -56,6 +56,9 @@
           __cls: 'clickable',
           __attrs: 'onclick="location.hash=\'#/worker/' + w.id + '\'"',
           name: '<span class="strong">' + ui.esc(w.name) + '</span>' +
+                (w.added ? ' ' + ui.badge('נוסף במערכת', 'pos') : '') +
+                (w.edited ? ' ' + ui.badge('עודכן', 'info') : '') +
+                (!w.active ? ' ' + ui.badge('לא פעיל', 'warn') : '') +
                 (w.aliases && w.aliases.length ? ' ' + ui.badge('אוחד ' + (w.aliases.length + 1) + ' כתיבים', 'info') : ''),
           tz: w.tz ? '<span class="num muted">' + w.tz + '</span>' : ui.badge('חסר', 'warn'),
           team: teams.length ? '<span class="muted">' + ui.esc(teams.join(', ')) + '</span>' : null,
@@ -96,6 +99,7 @@
           return '<option value="' + o[0] + '"' + (state.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
         }).join('') + '</select></div>' +
         '<button class="btn sm" data-csv="workers" style="margin-bottom:1px">ייצוא CSV</button>' +
+        '<a class="btn sm primary" href="#/worker-new" style="margin-bottom:1px">+ עובד חדש</a>' +
         '</div>';
 
       var missingId = all.filter(function (w) { return !w.tz; }).length;

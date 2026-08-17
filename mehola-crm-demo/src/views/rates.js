@@ -90,13 +90,15 @@
         '<div class="grid g-3">' +
           field('תעריף בסיס לשעה (₪)', numInput('baseRate', cfg.baseRate, 0.5), 'חל על כל מי שאין לו תעריף חריג') +
           '<div class="field"><label>חריגים פעילים</label><div style="padding-top:6px">' +
-            (Object.keys(cfg.workerRates).length
-              ? Object.keys(cfg.workerRates).map(function (id) {
-                  var w = null;
-                  workers.forEach(function (x) { if (x.id === id) w = x; });
-                  return ui.badge((w ? w.name : id) + ' · ' + f.money(cfg.workerRates[id]), 'info');
-                }).join(' ')
-              : '<span class="muted">אין</span>') +
+            (function () {
+              // a rate can outlive its worker (deleted demo record) — show only live ones
+              var live = Object.keys(cfg.workerRates).map(function (id) {
+                var w = null;
+                workers.forEach(function (x) { if (x.id === id) w = x; });
+                return w ? ui.badge(w.name + ' · ' + f.money(cfg.workerRates[id]), 'info') : '';
+              }).filter(Boolean);
+              return live.length ? live.join(' ') : '<span class="muted">אין</span>';
+            })() +
           '</div></div>' +
           '<div class="field"><label>איפוס</label>' +
           '<button class="btn" id="resetBtn">החזר לתעריפי הדרישות</button>' +
@@ -142,8 +144,37 @@
           'שאר המסיעים בגיליון (שאדי, נמר, מאריא, כריסתין) חושבו לפי 30 ₪ לעובד כהנחת עבודה — ' +
           'יש לאשר מול המשרד.', 'warn', '⚠'), { flush: false });
 
+      /* --- records created in the app --- */
+      var c = M.store.counts();
+      var storeCard = ui.card('רשומות שנוספו במערכת',
+        'נשמרות בדפדפן בלבד, מעל הגיליון המיובא — הגיליון עצמו לעולם אינו משתנה',
+        '<div class="grid g-4">' +
+          miniStat('עובדים חדשים', c.workers) +
+          miniStat('עובדים שעודכנו', c.patches) +
+          miniStat('שיבוצי נוכחות', c.shifts) +
+          miniStat('ימים עם ייצור שהוזן', c.dayUnits) +
+        '</div>' +
+        '<div style="height:14px"></div>' +
+        (M.store.isEmpty()
+          ? ui.notice('טרם נוספו רשומות. להוספת עובד: <a href="#/workers">מאגר עובדים</a> ← ' +
+              '"עובד חדש". לשיבוץ ליום: <a href="#/pnl">רווח והפסד יומי</a> ← בחירת יום ← ' +
+              '"הוספת עובד ליום".', '', 'ℹ')
+          : '<button class="btn" id="storeReset">מחיקת כל הרשומות שנוספו</button>' +
+            '<span class="hint" style="margin-inline-start:10px">מחזיר את המערכת לנתוני הגיליון בלבד</span>'));
+
       mount.innerHTML = impact + '<div style="height:18px"></div>' +
-        dayCard + revCard + ratesCard + carriersCard;
+        dayCard + revCard + ratesCard + carriersCard + storeCard;
+
+      var sr = mount.querySelector('#storeReset');
+      if (sr) sr.addEventListener('click', function () {
+        if (sr.getAttribute('data-armed') !== '1') {
+          sr.setAttribute('data-armed', '1');
+          sr.className = 'btn neg';
+          sr.textContent = 'לחצו שוב לאישור';
+          return;
+        }
+        M.store.reset();
+      });
 
       /* --- wiring --- */
       Array.prototype.forEach.call(mount.querySelectorAll('[data-cfg]'), function (input) {
@@ -168,6 +199,12 @@
     var s = M.calc.splitHours(dayHours(cfg), cfg.ot);
     return s.h100 * cfg.baseRate + s.h125 * cfg.baseRate * cfg.ot.mult125 +
            s.h150 * cfg.baseRate * cfg.ot.mult150;
+  }
+
+  function miniStat(label, value) {
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px">' +
+      '<div class="muted" style="font-size:12px">' + label + '</div>' +
+      '<div style="font-size:20px;font-weight:680">' + value + '</div></div>';
   }
 
   function field(label, control, hint) {

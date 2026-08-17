@@ -82,6 +82,20 @@
 
     get: function () { return current; },
 
+    /** A carrier typed into a worker/attendance form has no rule yet — give it the
+        assumed one so its cost is never silently zero. Quiet: no re-render. */
+    ensureCarriers: function (data) {
+      var added = false;
+      (data.carriers || []).forEach(function (name) {
+        if (!current.carriers[name]) {
+          current.carriers[name] = clone(CARRIER_DEFAULTS[name] || CARRIER_ASSUMED);
+          added = true;
+        }
+      });
+      if (added) { try { localStorage.setItem(KEY, JSON.stringify(current)); } catch (e) {} }
+      return added;
+    },
+
     /** patch: partial config; nested objects are merged one level deep */
     set: function (patch) {
       Object.keys(patch).forEach(function (k) {
