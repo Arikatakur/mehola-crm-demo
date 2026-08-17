@@ -1,0 +1,68 @@
+Digital Transformation Feature Report: Mehola Company
+1. Management Dashboard (Website) Features
+The core objective is to transition Mehola Company from fragmented Excel "Gilionot" to a centralized, normalized relational database. This system will serve as the "Single Source of Truth," ensuring referential integrity across all 52 sites and mitigating the operational "fawda" (chaos) inherent in manual data entry.
+1.1 Centralized Worker Database & "Berut" (Detailed View)
+The system will implement a centralized Worker Entity repository. Administrators must be able to execute granular queries to aggregate data from multiple "Atarim" (sites) into a single, comprehensive "Berut" profile.
+•	Schema Fields:
+•	Primary Key:  National ID Number (Teudat Zehut).
+•	Personal Data:  Full Name, Contact Details, Emergency Contact.
+•	Operational Data:  Comprehensive site assignment history, skill sets (Logistics, Painting, Assembly, Export), and equipment certifications.
+•	Financial Metadata:  Site-specific pay rates and historical "Alut" (cost) logs.
+•	Search & Filter Engine:
+•	Dynamic Filtering:  Ability to isolate workforces by specific Atar, date range, or pay rate tiers (100%, 125%, 150%).
+•	Aggregation Logic:  The "Berut" view must synthesize fragmented shifts across various sites into a single monthly performance and cost report.
+1.2 Financial Reporting & Revenue Calculation Engine
+The system will feature a sophisticated Profit & Loss (P&L) module that distinguishes between "Alut" (worker cost) and "Asbaka" (revenue/supply).
+•	Hybrid Billing Logic:  The engine must toggle between  Hourly Billing  (Manpower Supply) and  Piece-Rate/Output Billing  (Logistics Services).
+•	Example:  For sites like "Diplomat" or "Jumbo," revenue must be calculated based on "Yitsur" (production units), such as the number of "Madbekot" (stickers) applied or units packaged, rather than just hours worked.
+•	Rate Application Priority:  To manage site-specific variables, the system must follow a strict hierarchy for rate calculation.| Priority | Logic Level | Description || ------ | ------ | ------ || 1 (Highest) | Site-Worker Specific | Overrides all rates if Worker A is assigned a unique rate for Site X (e.g., 40 NIS). || 2 | Global Worker Base | Default rate for Worker A if no site-specific override exists (e.g., 32 NIS). || 3 | Site Minimum | The minimum baseline rate established for a specific Atar. || Trigger | Overtime (OT) Tiers | 125%:  Applied after 8.5 daily hours or 42 weekly hours.  150%:  Applied after 10.5 daily hours. |
+1.3 Project & Site (Atarim) Management
+The system will manage the hierarchy of 52 distinct sites, categorizing operations into "Logistic Services" (Packaging/Assembly) and "Manpower Supply" (Hourly).
+•	Operational Hierarchy:
+•	Site (Atar):  The top-level entity (e.g., Diplomat, Jumbo, Nova).
+•	Department (Machlaka):  Specific zones within a site (e.g., Painting, Assembly, Export, Packaging).
+•	Assignment:  Individual worker allocation mapped to a specific Department for a defined "Siddur" (shift).
+1.4 Automated "Tlush" Parsing & Document Engine
+To solve the manual bottleneck of splitting bulk PDF salary files, the system will implement an Automated PDF Parsing Engine.
+1.	Parsing Logic:
+2.	Ingestion:  Administrator uploads a single bulk PDF containing hundreds of salary slips.
+3.	Identification:  The engine scans each page for a Unique ID (Teudat Zehut).
+4.	Segmentation:  The file is programmatically split into individual worker-specific PDFs.
+5.	Mapping & Encryption:  Each slip is mapped to the corresponding Worker ID in the database and encrypted.
+6.	Push Notification:  The system alerts the worker via the mobile app that their "Tlush" is available for viewing.
+7.	Digital Tofes 101:  A module for mobile submission of annual tax forms, including administrative status tracking (Pending/Verified).
+1.5 Administrative Controls (Harshot)
+A "Permissions Matrix" will ensure data isolation based on organizational roles.
+•	Manager (Menahal - Abu Anas):  Full visibility into P&L, global cost structures, and site profitability.
+•	Office Admin (Eileen):  Access to database management, PDF parsing, and Tofes 101 verification; restricted from top-level P&L summaries.
+•	Field Coordinator (Emad):  Access to "Siddur" (scheduling) and "Nokhahut" (attendance) logs only; no access to financial/salary data.
+2. Worker Mobile Application Features
+The UI/UX must prioritize a mobile-first, low-friction entry system to accommodate a diverse workforce with varying technical literacy.
+2.1 GPS-Verified Attendance (Nokhahut)
+To prevent fraudulent reporting, the attendance module will implement "Non-Repudiation Measures."
+•	Geofenced Check-in:  Check-in/out is only permitted if the GPS coordinate is within a 50-meter radius of the assigned Atar.
+•	Fail-safe Verification:  In areas with poor GPS signal, the system will support:
+•	NFC/QR Stickers (Madbekot):  Physical scan-points at site entrances.
+•	Facial Recognition:  Biometric triggers to confirm identity and prevent "proxy" check-ins.
+2.2 Worker Self-Service Portal
+A streamlined dashboard for workers to manage their employment relationship independently.
+•	Functionality:  View monthly hours, historical "Tlush" archive, and Tofes 101 status.
+•	UI Directive:  Large-scale iconography and biometric authentication to minimize text input requirements.
+2.3 Real-Time Scheduling (Siddur)
+The "Siddur" module links the field coordinator directly to the worker.
+•	Push Notifications:  Automated alerts for new assignments or schedule changes.
+•	Confirmation Loop:  Workers confirm or decline shifts, with status updates reflecting instantly on Emad’s coordinator dashboard.
+2.4 Integrated Communication
+Utilization of the SendWise API for automated WhatsApp messaging.
+•	Automated Alerts:  Shift reminders and urgent site alerts sent via WhatsApp.
+•	Audit Trail:  Every message is timestamped and logged in the central dashboard, creating a verifiable history of communication for labor compliance.
+3. Data Migration & System Integrity
+3.1 Excel-to-Database Migration ("Gilionot" Transition)
+The migration of legacy Excel data must follow a "Staging & Deduplication" protocol.
+•	Primary Key Unification:  Because workers appear across 52 different site logs with inconsistent naming conventions, the  ID Number  must serve as the Unique Primary Key to merge fragmented histories.
+•	Data Cleansing:  Removal of duplicate entries and standardization of site names before the final push to the production database.
+3.2 Audit Trails & Version History
+The system will maintain immutable logs of all administrative actions.
+•	Modification Logging:  Any change to a "Siddur" entry or a pay rate (e.g., an adjustment made by Emad or Eileen) must be logged with the user ID, timestamp, and "Before/After" values.
+•	Rollback Capability:  High-level administrators (Menahal) must have the ability to revert to previous versions of data in the event of entry errors.
+
