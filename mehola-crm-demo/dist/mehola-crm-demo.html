@@ -616,7 +616,7 @@ body.ai-open { overflow:hidden; }
 }
 
 </style>
-<!-- built 2026-08-17 23:55 by tools/build_single.py — edit the sources, not this file -->
+<!-- built 2026-08-18 21:26 by tools/build_single.py — edit the sources, not this file -->
 </head>
 <body>
 
@@ -689,6 +689,7 @@ body.ai-open { overflow:hidden; }
   </section>
 </div>
 
+<!-- ai:start -->
 <button class="ai-fab" id="aiOpen" aria-label="פתיחת העוזר החכם"><span>✦</span><strong>שאלו את ה-AI</strong></button>
 <div class="ai-overlay" id="aiOverlay" hidden>
   <section class="ai-drawer" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
@@ -711,6 +712,7 @@ body.ai-open { overflow:hidden; }
     <p class="ai-privacy">השאלה ותמצית נתוני CRM (ללא ת.ז או טלפון) נשלחות ל‑OpenAI לצורך יצירת התשובה.</p>
   </section>
 </div>
+<!-- ai:end -->
 
 <script>
 /* ---- src/data/rosman.js ---- */
@@ -8313,7 +8315,7 @@ window.M.DATA = {
 })(window.M = window.M || {});
 
 </script>
-<script>
+<!-- ai:start --><script>
 /* ---- src/ai.js ---- */
 /* Mehola AI assistant: contextual CRM Q&A through the local secure API proxy. */
 (function (M) {
@@ -8404,6 +8406,6 @@ window.M.DATA = {
   });
 })(window.M = window.M || {});
 
-</script>
+</script><!-- ai:end -->
 </body>
 </html>

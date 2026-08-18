@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# generated deploy output — node tools/build_web.mjs
+public/

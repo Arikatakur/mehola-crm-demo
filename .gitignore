@@ -1,0 +1,13 @@
+# Client source workbooks stay outside the repo, along with Office lock files.
+*.xlsx
+*.xls
+~$*
+
+# Generated deploy output — rebuild with: node mehola-crm-demo/tools/build_web.mjs
+mehola-crm-demo/public/
+
+.vercel/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

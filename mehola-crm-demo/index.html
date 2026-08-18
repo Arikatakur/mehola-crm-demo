@@ -78,6 +78,7 @@
   </section>
 </div>
 
+<!-- ai:start -->
 <button class="ai-fab" id="aiOpen" aria-label="פתיחת העוזר החכם"><span>✦</span><strong>שאלו את ה-AI</strong></button>
 <div class="ai-overlay" id="aiOverlay" hidden>
   <section class="ai-drawer" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
@@ -100,6 +101,7 @@
     <p class="ai-privacy">השאלה ותמצית נתוני CRM (ללא ת.ז או טלפון) נשלחות ל‑OpenAI לצורך יצירת התשובה.</p>
   </section>
 </div>
+<!-- ai:end -->
 
 <script src="src/data/rosman.js"></script>
 <script src="src/lib/format.js"></script>
@@ -116,6 +118,6 @@
 <script src="src/views/rates.js"></script>
 <script src="src/views/quality.js"></script>
 <script src="src/app.js"></script>
-<script src="src/ai.js"></script>
+<!-- ai:start --><script src="src/ai.js"></script><!-- ai:end -->
 </body>
 </html>
