@@ -1,0 +1,15 @@
+# Client source material — the deployed site is built from mehola-crm-demo/src,
+# so none of this ever needs to reach the build container.
+*.xlsx
+*.xls
+~$*
+meeting-transcript.txt
+what-the-company-wants.txt
+mehola-image.jpg
+
+# In the repo, but not part of the web build.
+mehola-crm-demo/docs/
+mehola-crm-demo/dist/
+mehola-crm-demo/start.bat
+mehola-crm-demo/tools/*.py
+mehola-crm-demo/tools/__pycache__/

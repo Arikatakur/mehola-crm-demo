@@ -3,6 +3,27 @@
 All notable changes to the Mehola CRM demo.
 Format follows [Keep a Changelog](https://keepachangelog.com/); dates are ISO.
 
+## [Unreleased]
+
+### Added
+- Vercel deployment. `vercel.json` at the repository root builds the site with
+  `tools/build_web.mjs` and publishes `public/` — a dependency-free Node script
+  that copies `index.html`, `src/` and `assets/` into an output directory and
+  verifies every reference resolves. Nothing else in the repo is published, so
+  the source workbook, the meeting transcript and `docs/` stay unserved.
+- Security headers on the deployment: a CSP that keeps the page to same-origin
+  resources (`'unsafe-inline'` is required for the generated `onclick` row
+  handlers), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  and `noindex` — the demo is shared by link, not through search.
+- `<!-- ai:start -->` / `<!-- ai:end -->` markers around the AI drawer in
+  `index.html`, so one region can be excluded from a build.
+
+### Changed
+- The AI assistant is not part of the Vercel deployment: it depends on the
+  `/api/ai` proxy in `tools/serve.py` holding an `OPENAI_API_KEY`, which a static
+  deployment has nowhere to keep. `tools/build_web.mjs` strips it. Local
+  development through `tools/serve.py` is unchanged.
+
 ## [0.2.0] — 2026-08-17
 
 The demo becomes usable, not just readable: workers can be added and paid, and
