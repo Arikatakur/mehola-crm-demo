@@ -33,7 +33,7 @@
 
     kpi: function (label, value, sub, opts) {
       opts = opts || {};
-      return '<div class="card kpi' + (opts.accent ? ' accent' : '') + '">' +
+      return '<div class="card kpi' + (opts.accent ? ' accent' : '') + (opts.kind ? ' kpi-' + opts.kind : '') + '">' +
         '<div class="label">' + esc(label) + (opts.badge ? ' <span class="badge ' +
           (opts.badgeKind || '') + '">' + esc(opts.badge) + '</span>' : '') + '</div>' +
         '<div class="value ' + (opts.tone || '') + '">' + value + '</div>' +
@@ -45,7 +45,9 @@
       return '<section class="card">' +
         (title ? '<div class="card-head"><div><h2>' + esc(title) + '</h2>' +
           (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
-          (opts.actions || '') + '</div>' : '') +
+          '<div class="card-head-actions">' + (opts.actions || '') +
+          '<button class="card-help" data-help-card="' + esc(title) + '" aria-label="עזרה על ' +
+          esc(title) + '">?</button></div></div>' : '') +
         '<div class="card-body' + (opts.flush ? ' flush' : '') + '">' + bodyHtml + '</div>' +
         '</section>';
     },
