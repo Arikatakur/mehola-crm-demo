@@ -26,17 +26,17 @@
       <div class="theme-picker">
         <button class="theme-toggle" id="themeToggle" aria-expanded="false" aria-controls="themePanel">
           <span class="theme-icon" aria-hidden="true">◉</span>
-          <span><strong>צבע ורקע</strong><small id="themeName">כחול מודרני</small></span>
+          <span><strong>מראה וערכת נושא</strong><small id="themeName">מקצועי בהיר</small></span>
           <span class="theme-chevron" aria-hidden="true">⌃</span>
         </button>
         <div class="theme-panel" id="themePanel" hidden>
           <span class="theme-label">בחירת ערכת נושא</span>
           <div class="theme-options" role="radiogroup" aria-label="ערכת צבעים">
-            <button class="theme-option" data-theme="blue" role="radio" aria-label="כחול מודרני"><i style="--swatch:#2563eb"></i><span>כחול</span></button>
-            <button class="theme-option" data-theme="emerald" role="radio" aria-label="ירוק טבעי"><i style="--swatch:#059669"></i><span>ירוק</span></button>
-            <button class="theme-option" data-theme="violet" role="radio" aria-label="סגול יצירתי"><i style="--swatch:#7c3aed"></i><span>סגול</span></button>
-            <button class="theme-option" data-theme="sunset" role="radio" aria-label="כתום חם"><i style="--swatch:#ea580c"></i><span>כתום</span></button>
-            <button class="theme-option" data-theme="graphite" role="radio" aria-label="אפור אלגנטי"><i style="--swatch:#475569"></i><span>אפור</span></button>
+            <button class="theme-option" data-theme="light" role="radio" aria-label="מקצועי בהיר"><i style="--swatch:#2563eb"></i><span>בהיר</span></button>
+            <button class="theme-option" data-theme="dark" role="radio" aria-label="מודרני כהה"><i style="--swatch:#111827"></i><span>כהה</span></button>
+            <button class="theme-option" data-theme="deep-blue" role="radio" aria-label="כחול עמוק"><i style="--swatch:#0b4f8a"></i><span>עמוק</span></button>
+            <button class="theme-option" data-theme="colorful" role="radio" aria-label="צבעוני מאוזן"><i style="--swatch:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b)"></i><span>צבעוני</span></button>
+            <button class="theme-option" data-theme="contrast" role="radio" aria-label="ניגודיות גבוהה"><i style="--swatch:#000"></i><span>ניגודיות</span></button>
           </div>
         </div>
       </div>
@@ -78,6 +78,29 @@
   </section>
 </div>
 
+<button class="ai-fab" id="aiOpen" aria-label="פתיחת העוזר החכם"><span>✦</span><strong>שאלו את ה-AI</strong></button>
+<div class="ai-overlay" id="aiOverlay" hidden>
+  <section class="ai-drawer" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+    <header class="ai-head">
+      <div class="ai-avatar">✦</div>
+      <div><span>Mehola AI</span><h2 id="aiTitle">עוזר ניתוח חכם</h2></div>
+      <button class="help-close" id="aiClose" aria-label="סגירת העוזר">×</button>
+    </header>
+    <div class="ai-context"><span class="dot"></span><span id="aiContextLabel">מחובר לנתוני המסך הנוכחי</span></div>
+    <div class="ai-messages" id="aiMessages" aria-live="polite">
+      <div class="ai-message assistant"><div>שלום, אני יכול להסביר את הנתונים, לנתח עלויות ולזהות חריגות. במה תרצו להתמקד?</div></div>
+    </div>
+    <div class="ai-suggestions" id="aiSuggestions">
+      <button>למה האתר מפסיד?</button><button>מי העובדים היקרים ביותר?</button><button>איפה יש חריגות?</button>
+    </div>
+    <form class="ai-compose" id="aiForm">
+      <textarea id="aiInput" rows="2" maxlength="4000" placeholder="שאלו על הנתונים…" required></textarea>
+      <button type="submit" id="aiSend" aria-label="שליחת שאלה">↑</button>
+    </form>
+    <p class="ai-privacy">השאלה ותמצית נתוני CRM (ללא ת.ז או טלפון) נשלחות ל‑OpenAI לצורך יצירת התשובה.</p>
+  </section>
+</div>
+
 <script src="src/data/rosman.js"></script>
 <script src="src/lib/format.js"></script>
 <script src="src/lib/config.js"></script>
@@ -93,5 +116,6 @@
 <script src="src/views/rates.js"></script>
 <script src="src/views/quality.js"></script>
 <script src="src/app.js"></script>
+<script src="src/ai.js"></script>
 </body>
 </html>

@@ -20,15 +20,15 @@
       /* --- KPI row --- */
       var kpis = '<div class="grid g-4">' +
         ui.kpi('הכנסה', f.money(t.revenue),
-               f.num(t.units) + ' יחידות ייצור') +
+               f.num(t.units) + ' יחידות ייצור', { kind: 'income' }) +
         ui.kpi('עלות כוללת', f.money(t.totalCost),
-               'עובדים ' + f.money(t.workerCost) + ' · הסעות ' + f.money(t.transportCost)) +
+               'עובדים ' + f.money(t.workerCost) + ' · הסעות ' + f.money(t.transportCost), { kind: 'cost' }) +
         ui.kpi('רווח / הפסד', '<span class="' + ui.tone(t.profit) + '">' + f.moneySigned(t.profit) + '</span>',
-               'שיעור ' + f.pct(t.margin), { accent: true }) +
+               'שיעור ' + f.pct(t.margin), { accent: true, kind: t.profit < 0 ? 'loss' : 'profit' }) +
         ui.kpi('מחיר איזון ליחידה', f.money(t.breakEvenPrice, 3),
                'מול ' + f.money(cfg.unitPrice, 2) + ' בפועל',
                { badge: t.breakEvenPrice > cfg.unitPrice ? 'מתחת לאיזון' : 'מעל האיזון',
-                 badgeKind: t.breakEvenPrice > cfg.unitPrice ? 'neg' : 'pos' }) +
+                 badgeKind: t.breakEvenPrice > cfg.unitPrice ? 'neg' : 'pos', kind: 'breakeven' }) +
         '</div>';
 
       /* --- profit per day --- */

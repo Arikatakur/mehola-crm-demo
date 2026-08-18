@@ -33,7 +33,7 @@
 
     kpi: function (label, value, sub, opts) {
       opts = opts || {};
-      return '<div class="card kpi' + (opts.accent ? ' accent' : '') + '">' +
+      return '<div class="card kpi' + (opts.accent ? ' accent' : '') + (opts.kind ? ' kpi-' + opts.kind : '') + '">' +
         '<div class="label">' + esc(label) + (opts.badge ? ' <span class="badge ' +
           (opts.badgeKind || '') + '">' + esc(opts.badge) + '</span>' : '') + '</div>' +
         '<div class="value ' + (opts.tone || '') + '">' + value + '</div>' +

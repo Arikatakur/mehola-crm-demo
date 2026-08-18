@@ -57,8 +57,8 @@
   }
 
   var THEMES = {
-    blue: 'כחול מודרני', emerald: 'ירוק טבעי', violet: 'סגול יצירתי',
-    sunset: 'כתום חם', graphite: 'אפור אלגנטי'
+    light: 'מקצועי בהיר', dark: 'מודרני כהה', 'deep-blue': 'כחול עמוק',
+    colorful: 'צבעוני מאוזן', contrast: 'ניגודיות גבוהה'
   };
 
   var SCREEN_HELP = {
@@ -117,7 +117,7 @@
   }
 
   function applyTheme(name) {
-    if (!THEMES[name]) name = 'blue';
+    if (!THEMES[name]) name = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', name);
     localStorage.setItem('mehola-theme', name);
     var label = document.getElementById('themeName');
@@ -189,7 +189,30 @@
 
   M.app = {
     rerender: render,
-    ctx: function () { return currentRoute; }
+    ctx: function () { return currentRoute; },
+    aiContext: function () {
+      var days = M.calc.run(data, cfg), totals = M.calc.totals(days);
+      return {
+        screen: currentRoute ? currentRoute.route.path || 'dashboard' : 'dashboard',
+        site: data.site.name,
+        period: { from: data.source.from, to: data.source.to },
+        schedule_mode: cfg.scheduleMode,
+        rates: { unit_price: cfg.unitPrice, base_hourly_rate: cfg.baseRate },
+        totals: totals,
+        days: days.map(function (d) {
+          return { date: d.date, workers: d.workers, hours: d.hours, units: d.units,
+            revenue: d.revenue, worker_cost: d.workerCost, transport_cost: d.transportCost,
+            total_cost: d.totalCost, profit: d.profit };
+        }),
+        workers: M.calc.workerTotals(days, data).map(function (w) {
+          return { name: w.name, active: w.active !== false, days: w.days, hours: w.hours,
+            overtime_hours: w.h125 + w.h150, hourly_rate: w.rate, wage_cost: w.cost,
+            transport_cost: w.transport, teams: Object.keys(w.teams), carriers: Object.keys(w.carriers) };
+        }),
+        quality: { total_issues: data.issues.length,
+          open_issues: data.issues.filter(function (i) { return i.severity !== 'fixed'; }).length }
+      };
+    }
   };
 
   window.addEventListener('hashchange', function () {
@@ -206,7 +229,7 @@
   });
 
   document.addEventListener('DOMContentLoaded', function () {
-    applyTheme(localStorage.getItem('mehola-theme') || 'blue');
+    applyTheme(localStorage.getItem('mehola-theme') || 'system');
     document.getElementById('siteName').textContent = data.site.name;
     document.getElementById('siteRange').textContent =
       M.fmt.date(data.source.from) + ' – ' + M.fmt.date(data.source.to);
